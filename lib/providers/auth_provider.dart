@@ -90,4 +90,20 @@ class AuthProvider extends ChangeNotifier {
       _setLoading(false);
     }
   }
+
+  // Restore user session on startup
+  Future<bool> checkSession() async {
+    _setLoading(true);
+    _clearError();
+    try {
+      final user = await _authRepository.getCurrentUser();
+      _currentUser = user;
+      _setLoading(false);
+      return _currentUser != null;
+    } catch (e) {
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      _setLoading(false);
+      return false;
+    }
+  }
 }

@@ -1,6 +1,6 @@
 class AppConstants {
   // App general info
-  static const String appName = 'JJaass App';
+  static const String appName = 'JJAASS Water Market';
 
   // Role Names
   static const String roleCustomer = 'customer';

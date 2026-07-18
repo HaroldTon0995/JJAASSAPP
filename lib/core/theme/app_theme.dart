@@ -2,19 +2,19 @@ import 'package:flutter/material.dart';
 
 class AppTheme {
   // Brand color definitions
-  static const Color primaryColor = Color(0xFF6366F1); // Indigo
-  static const Color secondaryColor = Color(0xFFEC4899); // Pink / Rose
-  static const Color accentColor = Color(0xFF8B5CF6); // Violet
+  static const Color primaryColor = Color(0xFF009CA6); // Aqua Teal
+  static const Color secondaryColor = Color(0xFF0284C7); // Light Blue / Sky
+  static const Color accentColor = Color(0xFF00B4D8); // Bright Cyan
 
   // Light theme background and surface colors
-  static const Color lightBg = Color(0xFFF8FAFC); // Slate 50
+  static const Color lightBg = Colors.white; // Pure White Background
   static const Color lightSurface = Colors.white;
-  static const Color lightText = Color(0xFF0F172A); // Slate 900
+  static const Color lightText = Color(0xFF1E293B); // Slate 800
 
   // Dark theme background and surface colors
-  static const Color darkBg = Color(0xFF0F172A); // Slate 900
-  static const Color darkSurface = Color(0xFF1E293B); // Slate 800
-  static const Color darkText = Color(0xFFF8FAFC); // Slate 50
+  static const Color darkBg = Color(0xFF0B1E21); // Deep Slate Teal
+  static const Color darkSurface = Color(0xFF142F34); // Dark Teal Surface
+  static const Color darkText = Color(0xFFEDF8F9); // Soft Teal-White
 
   static ThemeData get lightTheme {
     return ThemeData(
@@ -34,10 +34,10 @@ class AppTheme {
       scaffoldBackgroundColor: lightBg,
       cardTheme: CardThemeData(
         color: lightSurface,
-        elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.05),
+        elevation: 0, // Flat design with custom thin borders is modern
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.0), // Thin border
         ),
       ),
       appBarTheme: const AppBarTheme(
@@ -72,11 +72,11 @@ class AppTheme {
         contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade200),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -110,10 +110,10 @@ class AppTheme {
       scaffoldBackgroundColor: darkBg,
       cardTheme: CardThemeData(
         color: darkSurface,
-        elevation: 4,
-        shadowColor: Colors.black.withOpacity(0.2),
+        elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.white10, width: 1.0),
         ),
       ),
       appBarTheme: const AppBarTheme(
@@ -148,11 +148,11 @@ class AppTheme {
         contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade800),
+          borderSide: const BorderSide(color: Colors.white10),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade800),
+          borderSide: const BorderSide(color: Colors.white10),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
+import '../services/api_service.dart';
 
 abstract class AuthRepository {
   Future<UserModel> login({required String email, required String password});
   Future<UserModel> signUp({required String name, required String email, required String password, required UserRole role});
   Future<void> logout();
+  Future<UserModel?> getCurrentUser();
 }
 
 class MockAuthRepository implements AuthRepository {
@@ -35,12 +37,17 @@ class MockAuthRepository implements AuthRepository {
     }
 
     // Mock successful login returning corresponding user
-    return UserModel(
-      id: 'usr_${DateTime.now().millisecondsSinceEpoch}',
+    final user = UserModel(
+      id: 'usr_${email.hashCode.abs()}',
       name: email.split('@').first.toUpperCase(),
       email: email,
       role: detectedRole,
     );
+
+    // Sync user with mock list
+    ApiService.addMockUser(user);
+
+    return user;
   }
 
   @override
@@ -60,22 +67,33 @@ class MockAuthRepository implements AuthRepository {
       throw Exception('Password must be at least 6 characters.');
     }
 
-    return UserModel(
-      id: 'usr_${DateTime.now().millisecondsSinceEpoch}',
+    final user = UserModel(
+      id: 'usr_${email.hashCode.abs()}',
       name: name,
       email: email,
       role: role,
     );
+
+    // Add registered user directly to ApiService's mock user directory
+    ApiService.addMockUser(user);
+
+    return user;
   }
 
   @override
   Future<void> logout() async {
     await Future.delayed(const Duration(milliseconds: 500));
   }
+
+  @override
+  Future<UserModel?> getCurrentUser() async {
+    // Return null in mock mode to let users login manually
+    return null;
+  }
 }
 
 class SupabaseAuthRepository implements AuthRepository {
-  final SupabaseClient _client = Supabase.instance.client;
+  SupabaseClient get _client => Supabase.instance.client;
 
   @override
   Future<UserModel> login({required String email, required String password}) async {
@@ -151,5 +169,41 @@ class SupabaseAuthRepository implements AuthRepository {
   @override
   Future<void> logout() async {
     await _client.auth.signOut();
+  }
+
+  @override
+  Future<UserModel?> getCurrentUser() async {
+    try {
+      final session = _client.auth.currentSession;
+      if (session == null) return null;
+      final user = _client.auth.currentUser;
+      if (user == null) return null;
+
+      try {
+        final profile = await _client
+            .from('profiles')
+            .select()
+            .eq('id', user.id)
+            .single();
+        return UserModel.fromJson(profile);
+      } catch (e) {
+        // Fallback
+        UserRole role = UserRole.customer;
+        final email = user.email ?? '';
+        if (email.toLowerCase().contains('admin')) {
+          role = UserRole.admin;
+        } else if (email.toLowerCase().contains('driver')) {
+          role = UserRole.driver;
+        }
+        return UserModel(
+          id: user.id,
+          name: email.split('@').first.toUpperCase(),
+          email: email,
+          role: role,
+        );
+      }
+    } catch (e) {
+      return null;
+    }
   }
 }
