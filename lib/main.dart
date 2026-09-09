@@ -4,6 +4,7 @@ import 'core/constants/app_constants.dart';
 import 'core/routes/app_routes.dart';
 import 'core/theme/app_theme.dart';
 import 'providers/auth_provider.dart';
+import 'providers/order_provider.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -16,7 +17,7 @@ void main() async {
         AppConstants.supabaseAnonKey != 'YOUR_SUPABASE_PROJECT_ANON_KEY') {
       await Supabase.initialize(
         url: AppConstants.supabaseUrl,
-        anonKey: AppConstants.supabaseAnonKey,
+        publishableKey: AppConstants.supabaseAnonKey,
       );
     } else {
       debugPrint('Warning: Supabase credentials are not set. Running in fallback mode.');
@@ -36,6 +37,7 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => OrderProvider()),
       ],
       child: MaterialApp(
         title: AppConstants.appName,

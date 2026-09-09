@@ -1,20 +1,105 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
-/// Renders the JJAASS Water Market droplet logo.
+/// Renders the JJAASS Water Market logo emblem.
 class WaterDropletLogo extends StatelessWidget {
   final double size;
-  const WaterDropletLogo({super.key, this.size = 64});
+  final bool rounded;
+  final bool showShadow;
+
+  const WaterDropletLogo({
+    super.key,
+    this.size = 64,
+    this.rounded = true,
+    this.showShadow = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CustomPaint(
-        painter: _WaterDropletPainter(),
+    Widget imageWidget = ClipRRect(
+      borderRadius: BorderRadius.circular(rounded ? size / 2 : 12),
+      child: Image.asset(
+        'assets/images/logo_icon.jpg',
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => SizedBox(
+          width: size,
+          height: size,
+          child: CustomPaint(
+            painter: _WaterDropletPainter(),
+          ),
+        ),
       ),
     );
+
+    if (showShadow) {
+      return Container(
+        decoration: BoxDecoration(
+          shape: rounded ? BoxShape.circle : BoxShape.rectangle,
+          borderRadius: rounded ? null : BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: imageWidget,
+      );
+    }
+    return imageWidget;
+  }
+}
+
+/// Renders the full horizontal banner logo of JJAASS Water Market.
+class JjaassFullLogo extends StatelessWidget {
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+  final BorderRadius? borderRadius;
+
+  const JjaassFullLogo({
+    super.key,
+    this.width,
+    this.height = 50,
+    this.fit = BoxFit.contain,
+    this.borderRadius,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget image = Image.asset(
+      'assets/images/logo_full.jpg',
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          WaterDropletLogo(size: height ?? 40),
+          const SizedBox(width: 10),
+          const Text(
+            'JJAASS',
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 22,
+              letterSpacing: 1.2,
+              color: Color(0xFF0F2B5C),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (borderRadius != null) {
+      return ClipRRect(
+        borderRadius: borderRadius!,
+        child: image,
+      );
+    }
+    return image;
   }
 }
 
@@ -23,7 +108,7 @@ class _WaterDropletPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..shader = const LinearGradient(
-        colors: [Color(0xFF0284C7), Color(0xFF009CA6)],
+        colors: [Color(0xFF0284C7), Color(0xFF38BDF8)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ).createShader(Offset.zero & size)
@@ -50,7 +135,7 @@ class _WaterDropletPainter extends CustomPainter {
 
     // Dynamic inner reflection
     final highlightPaint = Paint()
-      ..color = Colors.white.withOpacity(0.3)
+      ..color = Colors.white.withValues(alpha: 0.3)
       ..style = PaintingStyle.fill;
     final highlightPath = Path();
     highlightPath.moveTo(size.width * 0.46, size.height * 0.28);
@@ -95,7 +180,7 @@ class _WaterJugPainter extends CustomPainter {
 
     // Draw water ripples at the bottom (nested ovals/circles)
     final ripplePaint = Paint()
-      ..color = const Color(0xFF009CA6).withOpacity(0.2)
+      ..color = const Color(0xFF0284C7).withValues(alpha: 0.2)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
 
@@ -104,7 +189,7 @@ class _WaterJugPainter extends CustomPainter {
 
     // Splash ripples filled
     final splashPaint = Paint()
-      ..color = const Color(0xFF009CA6).withOpacity(0.08)
+      ..color = const Color(0xFF0284C7).withValues(alpha: 0.08)
       ..style = PaintingStyle.fill;
     canvas.drawOval(Rect.fromLTRB(w * 0.25, h * 0.83, w * 0.75, h * 0.89), splashPaint);
 
@@ -172,7 +257,7 @@ class _WaterJugPainter extends CustomPainter {
 
     // Cap on top
     final capPaint = Paint()
-      ..color = const Color(0xFF009CA6)
+      ..color = const Color(0xFF0284C7)
       ..style = PaintingStyle.fill;
     canvas.drawRRect(
       RRect.fromRectAndRadius(Rect.fromLTRB(w * 0.41, h * 0.18, w * 0.59, h * 0.24), const Radius.circular(4)),
@@ -181,7 +266,7 @@ class _WaterJugPainter extends CustomPainter {
 
     // Ribs on the jug body (horizontal styling lines)
     final ribPaint = Paint()
-      ..color = Colors.white.withOpacity(0.3)
+      ..color = Colors.white.withValues(alpha: 0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
     canvas.drawLine(Offset(w * 0.31, h * 0.50), Offset(w * 0.69, h * 0.50), ribPaint);
@@ -191,7 +276,7 @@ class _WaterJugPainter extends CustomPainter {
 
     // Highlight sheen
     final reflectionPaint = Paint()
-      ..color = Colors.white.withOpacity(0.2)
+      ..color = Colors.white.withValues(alpha: 0.2)
       ..style = PaintingStyle.fill;
     final reflectionPath = Path();
     reflectionPath.moveTo(w * 0.34, h * 0.46);
@@ -258,7 +343,7 @@ class WaveBackgroundPainter extends CustomPainter {
 
     // Second wave (slightly darker teal sheen)
     final paint2 = Paint()
-      ..color = const Color(0xFFB2DFDB).withOpacity(0.6)
+      ..color = const Color(0xFFB2DFDB).withValues(alpha: 0.6)
       ..style = PaintingStyle.fill;
 
     final path2 = Path();
@@ -310,7 +395,7 @@ class _SalesOverviewPainter extends CustomPainter {
 
     // Draw background grid lines (horizontal)
     final gridPaint = Paint()
-      ..color = Colors.grey.withOpacity(0.08)
+      ..color = Colors.grey.withValues(alpha: 0.08)
       ..strokeWidth = 1;
 
     for (int i = 0; i <= 5; i++) {
@@ -361,8 +446,8 @@ class _SalesOverviewPainter extends CustomPainter {
     final fillPaint = Paint()
       ..shader = LinearGradient(
         colors: [
-          const Color(0xFF009CA6).withOpacity(0.2),
-          const Color(0xFF009CA6).withOpacity(0.00),
+          const Color(0xFF0284C7).withValues(alpha: 0.2),
+          const Color(0xFF0284C7).withValues(alpha: 0.0),
         ],
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
@@ -373,7 +458,7 @@ class _SalesOverviewPainter extends CustomPainter {
 
     // Line paint
     final linePaint = Paint()
-      ..color = const Color(0xFF009CA6)
+      ..color = const Color(0xFF0284C7)
       ..strokeWidth = 3.0
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -382,11 +467,11 @@ class _SalesOverviewPainter extends CustomPainter {
 
     // Draw marker dots
     final dotPaint = Paint()
-      ..color = const Color(0xFF009CA6)
+      ..color = const Color(0xFF0284C7)
       ..style = PaintingStyle.fill;
 
     final dotOuterPaint = Paint()
-      ..color = const Color(0xFF009CA6).withOpacity(0.25)
+      ..color = const Color(0xFF0284C7).withValues(alpha: 0.25)
       ..style = PaintingStyle.fill;
 
     for (int i = 0; i < data.length; i++) {
@@ -398,7 +483,7 @@ class _SalesOverviewPainter extends CustomPainter {
       if (i == 4) {
         // Highlight Friday with larger outline
         canvas.drawCircle(pt, 11, Paint()
-          ..color = const Color(0xFF009CA6).withOpacity(0.12)
+          ..color = const Color(0xFF0284C7).withValues(alpha: 0.12)
           ..style = PaintingStyle.fill);
 
         // Draw Friday ₱12,450 box popup above the point
@@ -521,7 +606,7 @@ class _DonutChartPainter extends CustomPainter {
 
     final List<double> percentages = [0.53, 0.25, 0.14, 0.08];
     final List<Color> colors = [
-      const Color(0xFF009CA6), // Teal
+      const Color(0xFF0284C7), // Teal
       const Color(0xFF0284C7), // Light Blue
       const Color(0xFFF59E0B), // Orange
       const Color(0xFFEF4444), // Red

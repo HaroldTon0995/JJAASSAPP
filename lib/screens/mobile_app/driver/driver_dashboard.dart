@@ -1,13 +1,17 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/constants/app_constants.dart';
-import '../../core/routes/app_routes.dart';
-import '../../core/theme/app_theme.dart';
-import '../../core/utils/helpers.dart';
-import '../../providers/auth_provider.dart';
-import '../../services/api_service.dart';
-import '../../widgets/water_widgets.dart';
+import '../../../core/routes/app_routes.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/helpers.dart';
+import '../../../models/order_model.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../providers/order_provider.dart';
+import '../../../services/api_service.dart';
+import '../../../services/ai_support_service.dart';
+import '../../../widgets/water_widgets.dart';
+import '../../../widgets/google_map_widget.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'driver_styles.dart';
 
 class DriverDashboard extends StatefulWidget {
   const DriverDashboard({super.key});
@@ -20,31 +24,30 @@ class _DriverDashboardState extends State<DriverDashboard> {
   final ApiService _apiService = ApiService();
   bool _isLoading = true;
   bool _isOnline = true;
-  int _selectedTab = 0; 
+  int _selectedTab = 0;
   int _activeSidebarMenu = 0;
-
-  // Fully interactive mock data state variables
-  late List<Map<String, dynamic>> _availableJobs;
-  late List<Map<String, dynamic>> _completedTrips;
-  Map<String, dynamic>? _activeAcceptedJob;
-  double _todaysEarnings = 450.00;
   double _driverRating = 4.85;
 
   // AI Chat States
   final List<Map<String, dynamic>> _supportMessages = [
-    {'sender': 'AquaBot', 'message': "Hello! I'm AquaBot 💧 How can I help you today?"},
+    {
+      'sender': 'AquaBot',
+      'message': "Hello! I'm AquaBot 💧 How can I help you today?",
+    },
   ];
   final TextEditingController _supportInputController = TextEditingController();
   final ScrollController _chatScrollController = ScrollController();
+  bool _isChatLoading = false;
 
   // Settings controller
-  final TextEditingController _plateNoController = TextEditingController(text: 'ABC-1234');
+  final TextEditingController _plateNoController = TextEditingController(
+    text: 'ABC-1234',
+  );
   String _selectedVehicleType = 'Motorcycle with Rack';
 
   @override
   void initState() {
     super.initState();
-    _initMockData();
     _loadDashboardData();
   }
 
@@ -56,19 +59,6 @@ class _DriverDashboardState extends State<DriverDashboard> {
     super.dispose();
   }
 
-  void _initMockData() {
-    _availableJobs = [
-      {'id': '#JOB-102', 'customer': 'Pedro Reyes', 'destination': 'Brgy. Mabini, House 14', 'distance': '1.2 km', 'payout': '₱50.00', 'items': '1 x 19L Purified'},
-      {'id': '#JOB-103', 'customer': 'Juan Dela Cruz', 'destination': 'Brgy. San Isidro, Apt B', 'distance': '2.8 km', 'payout': '₱80.00', 'items': '2 x 19L Purified'},
-      {'id': '#JOB-104', 'customer': 'Anna Garcia', 'destination': 'Brgy. San Vicente, Lot 2', 'distance': '3.5 km', 'payout': '₱100.00', 'items': '2 x 19L Alkaline'},
-    ];
-
-    _completedTrips = [
-      {'id': '#TRIP-091', 'customer': 'Maria Santos', 'destination': 'Brgy. Poblacion, Road 2', 'distance': '1.5 km', 'payout': '₱60.00', 'time': '09:15 AM'},
-      {'id': '#TRIP-090', 'customer': 'Lito Lapid', 'destination': 'Brgy. San Isidro, St 4', 'distance': '2.1 km', 'payout': '₱70.00', 'time': 'Yesterday'},
-    ];
-  }
-
   Future<void> _loadDashboardData() async {
     setState(() {
       _isLoading = true;
@@ -78,14 +68,17 @@ class _DriverDashboardState extends State<DriverDashboard> {
       final data = await _apiService.getDriverDashboardData();
       if (mounted) {
         setState(() {
-          _todaysEarnings = (data['todaysEarnings'] as double?) ?? _todaysEarnings;
           _driverRating = (data['rating'] as double?) ?? _driverRating;
           _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        Helpers.showSnackBar(context, 'Failed to load driver data.', isError: true);
+        Helpers.showSnackBar(
+          context,
+          'Failed to load driver data.',
+          isError: true,
+        );
         setState(() {
           _isLoading = false;
         });
@@ -93,84 +86,149 @@ class _DriverDashboardState extends State<DriverDashboard> {
     }
   }
 
-  void _acceptDeliveryJob(Map<String, dynamic> job) {
-    if (_activeAcceptedJob != null) {
-      Helpers.showSnackBar(context, 'You currently have an active delivery job. Complete it first!', isError: true);
-      return;
+  void _acceptDeliveryJob(OrderModel order) async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final user = auth.currentUser;
+
+    final success = await orderProvider.acceptJob(
+      orderId: order.id,
+      driverId: user?.id ?? '',
+      driverName: user?.name ?? 'Driver',
+    );
+
+    if (success) {
+      if (mounted) {
+        setState(() {
+          _selectedTab = 1; // Auto navigate to GPS Map Tab
+          _activeSidebarMenu = 1;
+        });
+        Helpers.showSnackBar(
+          context,
+          'Job ${order.id} accepted! Navigate via GPS Deliveries Map.',
+        );
+      }
+    } else {
+      if (mounted) {
+        Helpers.showSnackBar(
+          context,
+          'You currently have an active delivery job. Complete it first!',
+          isError: true,
+        );
+      }
     }
-
-    setState(() {
-      _activeAcceptedJob = job;
-      _availableJobs.removeWhere((item) => item['id'] == job['id']);
-      _selectedTab = 1; // Auto navigate to GPS Map Tab
-      _activeSidebarMenu = 1;
-    });
-
-    Helpers.showSnackBar(context, 'Job ${job['id']} accepted! Navigate via GPS Deliveries Map.');
   }
 
-  void _completeActiveJob() {
-    if (_activeAcceptedJob == null) return;
-    final completedJob = _activeAcceptedJob!;
-    final double payoutVal = double.tryParse(completedJob['payout']!.replaceAll('₱', '')) ?? 0.00;
+  void _completeActiveJob(OrderModel activeOrder) async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final user = auth.currentUser;
 
-    setState(() {
-      _completedTrips.insert(0, {
-        'id': completedJob['id'].replaceAll('JOB', 'TRIP'),
-        'customer': completedJob['customer'],
-        'destination': completedJob['destination'],
-        'distance': completedJob['distance'],
-        'payout': completedJob['payout'],
-        'time': 'Just Now',
+    final success = await orderProvider.completeJob(
+      orderId: activeOrder.id,
+      driverId: user?.id ?? '',
+    );
+
+    if (success && mounted) {
+      final payoutVal = activeOrder.totalAmount * 0.5;
+      setState(() {
+        _selectedTab = 0; // Go back to dashboard
+        _activeSidebarMenu = 0;
       });
-      _todaysEarnings += payoutVal;
-      _activeAcceptedJob = null;
-      _selectedTab = 0; // Go back to dashboard
-      _activeSidebarMenu = 0;
-    });
-
-    Helpers.showSnackBar(context, 'Delivery completed successfully! +₱${payoutVal.toStringAsFixed(2)} added.');
+      Helpers.showSnackBar(
+        context,
+        'Delivery completed successfully! +₱${payoutVal.toStringAsFixed(2)} earnings added.',
+      );
+    }
   }
 
   void _cashOutEarnings() {
-    if (_todaysEarnings <= 0) {
-      Helpers.showSnackBar(context, 'No earnings balance to cash out.', isError: true);
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final user = auth.currentUser;
+    final driverId = user?.id ?? '';
+    final earnings = orderProvider.getDriverEarnings(driverId);
+
+    if (earnings <= 0) {
+      Helpers.showSnackBar(
+        context,
+        'No earnings balance to cash out.',
+        isError: true,
+      );
       return;
     }
 
-    final cashOutVal = _todaysEarnings;
-    setState(() {
-      _todaysEarnings = 0.00;
-    });
-
-    Helpers.showSnackBar(context, 'Successfully cashed out ₱${cashOutVal.toStringAsFixed(2)} to your GCash account!');
+    orderProvider.cashOutDriverEarnings(driverId);
+    Helpers.showSnackBar(
+      context,
+      'Successfully cashed out ₱${earnings.toStringAsFixed(2)} to your GCash account!',
+    );
   }
 
-  void _sendSupportMessage(String text) {
+  void _sendSupportMessage(String text) async {
     if (text.trim().isEmpty) return;
-    setState(() {
-      _supportMessages.add({'sender': 'Driver', 'message': text});
-      _supportInputController.clear();
+    if (_isChatLoading) return; // Prevent multiple requests at once
+    final userQuery = text.trim();
 
-      Future.delayed(const Duration(seconds: 1), () {
-        if (mounted) {
-          setState(() {
-            _supportMessages.add({
-              'sender': 'AquaBot',
-              'message': 'Received! AquaBot dispatch will coordinate support for: "$text"'
-            });
+    setState(() {
+      _supportMessages.add({'sender': 'Driver', 'message': userQuery});
+      _supportInputController.clear();
+      _isChatLoading = true;
+      _supportMessages.add({'sender': 'AquaBot', 'message': 'Thinking...'});
+    });
+
+    _scrollToBottom();
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final user = auth.currentUser;
+
+    try {
+      final response = await AiSupportService.getChatResponse(
+        query: userQuery,
+        isDriver: true,
+        isAdmin: false,
+        userId: user?.id ?? '',
+        userName: user?.name ?? 'Driver',
+        orderProvider: orderProvider,
+      );
+
+      if (mounted) {
+        setState(() {
+          if (_supportMessages.isNotEmpty && _supportMessages.last['message'] == 'Thinking...') {
+            _supportMessages.removeLast();
+          }
+          _supportMessages.add({'sender': 'AquaBot', 'message': response});
+          _isChatLoading = false;
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          if (_supportMessages.isNotEmpty && _supportMessages.last['message'] == 'Thinking...') {
+            _supportMessages.removeLast();
+          }
+          _supportMessages.add({
+            'sender': 'AquaBot',
+            'message': 'Sorry, I encountered an issue retrieving a response. Please check your connection and try again.'
           });
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_chatScrollController.hasClients) {
-              _chatScrollController.animateTo(
-                _chatScrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-              );
-            }
-          });
-        }
-      });
+          _isChatLoading = false;
+        });
+        _scrollToBottom();
+      }
+    }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chatScrollController.hasClients) {
+        _chatScrollController.animateTo(
+          _chatScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
     });
   }
 
@@ -189,12 +247,20 @@ class _DriverDashboardState extends State<DriverDashboard> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      drawer: (!isWide) ? Drawer(child: _buildSidebar(isDark, isDrawer: true)) : null,
+      drawer: (!isWide)
+          ? Drawer(child: _buildSidebar(isDark, isDrawer: true))
+          : null,
       appBar: isWide
           ? null
           : AppBar(
-              backgroundColor: isDark ? AppTheme.darkSurface : const Color(0xFFECF8FA),
-              title: Text(_getTabTitle(), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+              backgroundColor: Colors.white,
+              title: Text(
+                _getTabTitle(),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                ),
+              ),
               actions: [
                 IconButton(
                   icon: const Icon(Icons.sync_rounded),
@@ -218,7 +284,10 @@ class _DriverDashboardState extends State<DriverDashboard> {
                       Expanded(
                         child: RefreshIndicator(
                           onRefresh: _loadDashboardData,
-                          child: _buildSelectedTabContent(isDark, media.size.width),
+                          child: _buildSelectedTabContent(
+                            isDark,
+                            media.size.width,
+                          ),
                         ),
                       ),
                     ],
@@ -234,7 +303,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : const Color(0xFFECF8FA),
+        color: Colors.white,
         border: Border(
           bottom: BorderSide(
             color: isDark ? Colors.white10 : const Color(0xFFD0E7EB),
@@ -249,14 +318,25 @@ class _DriverDashboardState extends State<DriverDashboard> {
             children: [
               Text(
                 _getTabTitle(),
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF1E293B)),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF1E293B),
+                ),
               ),
               Row(
                 children: [
-                  const Text('Welcome back, ', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const Text(
+                    'Welcome back, ',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                   Text(
                     '${auth.currentUser?.name ?? "Driver"}!',
-                    style: const TextStyle(fontSize: 12, color: AppTheme.primaryColor, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.primaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
@@ -274,7 +354,11 @@ class _DriverDashboardState extends State<DriverDashboard> {
               decoration: InputDecoration(
                 hintText: 'Search routes, orders...',
                 hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-                prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade400, size: 18),
+                prefixIcon: Icon(
+                  Icons.search_rounded,
+                  color: Colors.grey.shade400,
+                  size: 18,
+                ),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
@@ -285,11 +369,17 @@ class _DriverDashboardState extends State<DriverDashboard> {
           const SizedBox(width: 24),
           IconButton(
             onPressed: () {},
-            icon: const Icon(Icons.notifications_none_rounded, color: Color(0xFF64748B)),
+            icon: const Icon(
+              Icons.notifications_none_rounded,
+              color: Color(0xFF64748B),
+            ),
           ),
           IconButton(
             onPressed: () {},
-            icon: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF64748B)),
+            icon: const Icon(
+              Icons.chat_bubble_outline_rounded,
+              color: Color(0xFF64748B),
+            ),
           ),
           const SizedBox(width: 16),
           PopupMenuButton<String>(
@@ -298,25 +388,40 @@ class _DriverDashboardState extends State<DriverDashboard> {
                 _handleLogout();
               }
             },
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
             itemBuilder: (context) => [
               const PopupMenuItem<String>(
                 value: 'logout',
                 child: Row(
                   children: [
-                    Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 18),
+                    Icon(
+                      Icons.logout_rounded,
+                      color: Color(0xFFEF4444),
+                      size: 18,
+                    ),
                     SizedBox(width: 8),
-                    Text('Log Out', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
+                    Text(
+                      'Log Out',
+                      style: TextStyle(
+                        color: Color(0xFFEF4444),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ],
             child: CircleAvatar(
               radius: 18,
-              backgroundColor: AppTheme.primaryColor.withOpacity(0.12),
+              backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.12),
               child: Text(
                 (auth.currentUser?.name ?? 'D').substring(0, 1).toUpperCase(),
-                style: const TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  color: AppTheme.primaryColor,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -357,12 +462,17 @@ class _DriverDashboardState extends State<DriverDashboard> {
     return Container(
       width: 260,
       height: double.infinity,
-      color: isDark ? AppTheme.darkSurface : const Color(0xFFF1F9FB),
+      color: Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(left: 24, top: 24, right: 24, bottom: 16),
+            padding: const EdgeInsets.only(
+              left: 24,
+              top: 24,
+              right: 24,
+              bottom: 16,
+            ),
             child: Row(
               children: [
                 const WaterDropletLogo(size: 36),
@@ -372,11 +482,20 @@ class _DriverDashboardState extends State<DriverDashboard> {
                   children: [
                     const Text(
                       'JJAASS',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.primaryColor, letterSpacing: 0.5),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.primaryColor,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                     Text(
                       'Water Market',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF0F172A)),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
                     ),
                   ],
                 ),
@@ -391,58 +510,29 @@ class _DriverDashboardState extends State<DriverDashboard> {
               itemBuilder: (context, index) {
                 final item = menuItems[index];
                 final bool isSelected = _activeSidebarMenu == index;
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
-                  child: ListTile(
-                    onTap: () {
-                      setState(() {
-                        _activeSidebarMenu = index;
-                        _selectedTab = index;
-                      });
-                      if (isDrawer) {
-                        Navigator.of(context).pop();
-                      }
-                    },
-                    selected: isSelected,
-                    selectedTileColor: AppTheme.primaryColor,
-                    iconColor: const Color(0xFF64748B),
-                    selectedColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    dense: true,
-                    leading: Icon(
-                      item['icon'] as IconData,
-                      size: 20,
-                      color: isSelected ? Colors.white : const Color(0xFF64748B),
-                    ),
-                    title: Text(
-                      item['title'] as String,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                        color: isSelected ? Colors.white : const Color(0xFF475569),
-                      ),
-                    ),
-                  ),
+                return _SidebarItemTile(
+                  icon: item['icon'] as IconData,
+                  title: item['title'] as String,
+                  isSelected: isSelected,
+                  onTap: () {
+                    setState(() {
+                      _activeSidebarMenu = index;
+                      _selectedTab = index;
+                    });
+                    if (isDrawer) {
+                      Navigator.of(context).pop();
+                    }
+                  },
                 );
               },
             ),
           ),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
-            child: ListTile(
-              onTap: _handleLogout,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              dense: true,
-              leading: const Icon(Icons.logout_rounded, size: 20, color: Color(0xFFEF4444)),
-              title: const Text(
-                'Log Out',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFEF4444),
-                ),
-              ),
-            ),
+          _SidebarItemTile(
+            icon: Icons.logout_rounded,
+            title: 'Log Out',
+            isSelected: false,
+            textColor: const Color(0xFFEF4444),
+            onTap: _handleLogout,
           ),
           Padding(
             padding: const EdgeInsets.all(16.0),
@@ -451,7 +541,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
               padding: const EdgeInsets.all(14.0),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFFECF8FA), Color(0xFFE0F7FA)],
+                  colors: [Colors.white, Colors.white],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -464,7 +554,11 @@ class _DriverDashboardState extends State<DriverDashboard> {
                   const SizedBox(height: 10),
                   const Text(
                     'Efficient Log',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: AppTheme.primaryColor),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.primaryColor,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -502,6 +596,12 @@ class _DriverDashboardState extends State<DriverDashboard> {
   // TAB 0: DISPATCH DASHBOARD / OVERVIEW
   Widget _buildOverviewTab(bool isDark, double width) {
     final isDesktop = width >= 1100;
+    final auth = Provider.of<AuthProvider>(context);
+    final orderProvider = Provider.of<OrderProvider>(context);
+    final user = auth.currentUser;
+    final driverId = user?.id ?? '';
+    final todaysEarnings = orderProvider.getDriverEarnings(driverId);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
@@ -510,29 +610,17 @@ class _DriverDashboardState extends State<DriverDashboard> {
           // Duty Switch Header Banner
           Container(
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: _isOnline
-                    ? [const Color(0xFF009CA6), const Color(0xFF0EA5E9)]
-                    : [Colors.red.shade700, Colors.red.shade600],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: (_isOnline ? const Color(0xFF009CA6) : Colors.red).withOpacity(0.2),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                )
-              ],
-            ),
+            decoration: DriverDecorations.dutyBanner(_isOnline),
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 26,
-                  backgroundColor: Colors.white.withOpacity(0.18),
-                  child: const Icon(Icons.drive_eta_rounded, size: 28, color: Colors.white),
+                  backgroundColor: Colors.white.withValues(alpha: 0.18),
+                  child: const Icon(
+                    Icons.drive_eta_rounded,
+                    size: 28,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -541,19 +629,28 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     children: [
                       const Text(
                         'Delivery Duty Status',
-                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _isOnline ? 'Online - Receiving delivery jobs' : 'Offline - Resting',
-                        style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 12),
+                        _isOnline
+                            ? 'Online - Receiving delivery jobs'
+                            : 'Offline - Resting',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 Switch(
                   value: _isOnline,
-                  activeColor: Colors.white,
+                  activeThumbColor: Colors.white,
                   activeTrackColor: const Color(0xFF10B981),
                   inactiveThumbColor: Colors.white70,
                   inactiveTrackColor: Colors.black26,
@@ -563,7 +660,9 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     });
                     Helpers.showSnackBar(
                       context,
-                      _isOnline ? 'You are now Online and ready!' : 'You are now Offline.',
+                      _isOnline
+                          ? 'You are now Online and ready!'
+                          : 'You are now Offline.',
                     );
                   },
                 ),
@@ -578,7 +677,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
               Expanded(
                 child: _buildStatCard(
                   "Today's Income",
-                  '₱${_todaysEarnings.toStringAsFixed(2)}',
+                  '₱${todaysEarnings.toStringAsFixed(2)}',
                   'Earning details',
                   Icons.payments_rounded,
                   const Color(0xFF10B981),
@@ -606,11 +705,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
               children: [
                 Expanded(
                   flex: 5,
-                  child: Column(
-                    children: [
-                      _buildJobsCard(isDark),
-                    ],
-                  ),
+                  child: Column(children: [_buildJobsCard(isDark)]),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -648,63 +743,38 @@ class _DriverDashboardState extends State<DriverDashboard> {
     Color color,
     bool isDark,
   ) {
-    return Container(
-      padding: const EdgeInsets.all(20.0),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  value,
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: isDark ? Colors.white : const Color(0xFF0F172A)),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.08),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 28),
-          ),
-        ],
-      ),
+    return DriverStatCard(
+      title: title,
+      value: value,
+      subtitle: subtitle,
+      icon: icon,
+      color: color,
+      isDark: isDark,
     );
   }
 
   Widget _buildJobsCard(bool isDark) {
+    final auth = Provider.of<AuthProvider>(context);
+    final orderProvider = Provider.of<OrderProvider>(context);
+    final user = auth.currentUser;
+    final driverId = user?.id ?? '';
+
+    final availableJobs = orderProvider.getAvailableDriverJobs(driverId);
+    final activeJob = orderProvider.getActiveDriverJob(driverId);
+
     return Container(
       padding: const EdgeInsets.all(20.0),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
-      ),
+      decoration: DriverDecorations.card(isDark: isDark),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'Available Job Invitations',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1E293B),
+            ),
           ),
           const SizedBox(height: 16),
           if (!_isOnline)
@@ -712,42 +782,68 @@ class _DriverDashboardState extends State<DriverDashboard> {
               width: double.infinity,
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: isDark ? Colors.white.withOpacity(0.02) : const Color(0xFFF8FAFC),
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.02)
+                    : const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFF1F5F9)),
+                border: Border.all(
+                  color: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
+                ),
               ),
               child: const Center(
                 child: Text(
                   'Go Online to view job invitations.',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF64748B),
+                  ),
                 ),
               ),
             )
-          else if (_availableJobs.isEmpty && _activeAcceptedJob == null)
+          else if (availableJobs.isEmpty && activeJob == null)
             const Padding(
               padding: EdgeInsets.all(24.0),
               child: Center(child: Text('No job invitations at the moment.')),
             )
           else ...[
-            if (_activeAcceptedJob != null) ...[
+            if (activeJob != null) ...[
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.06),
+                  color: AppTheme.primaryColor.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.primaryColor.withOpacity(0.2)),
+                  border: Border.all(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.directions_bike_rounded, color: AppTheme.primaryColor, size: 28),
+                    const Icon(
+                      Icons.directions_bike_rounded,
+                      color: AppTheme.primaryColor,
+                      size: 28,
+                    ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Active Deliver Job in Progress', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
-                          Text('Dest: ${_activeAcceptedJob!['destination']}', style: const TextStyle(fontSize: 12)),
+                          Text(
+                            'Active Job: ${activeJob.id}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryColor,
+                            ),
+                          ),
+                          Text(
+                            'Customer: ${activeJob.customerName}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          Text(
+                            'Dest: ${activeJob.deliveryAddress}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
                         ],
                       ),
                     ),
@@ -756,7 +852,10 @@ class _DriverDashboardState extends State<DriverDashboard> {
                         _selectedTab = 1;
                         _activeSidebarMenu = 1;
                       }),
-                      child: const Text('Go to Map', style: TextStyle(fontSize: 11)),
+                      child: const Text(
+                        'Go to Map',
+                        style: TextStyle(fontSize: 11),
+                      ),
                     ),
                   ],
                 ),
@@ -766,27 +865,41 @@ class _DriverDashboardState extends State<DriverDashboard> {
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: _availableJobs.length,
+              itemCount: availableJobs.length,
               itemBuilder: (context, index) {
-                final job = _availableJobs[index];
+                final job = availableJobs[index];
+                final payoutVal = job.totalAmount * 0.5;
+
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.white.withOpacity(0.02) : const Color(0xFFF8FAFC),
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.02)
+                          : const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFF1F5F9)),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white10
+                            : const Color(0xFFF1F5F9),
+                      ),
                     ),
                     child: Row(
                       children: [
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: AppTheme.primaryColor.withOpacity(0.08),
+                            color: AppTheme.primaryColor.withValues(
+                              alpha: 0.08,
+                            ),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.location_on_rounded, color: AppTheme.primaryColor, size: 24),
+                          child: const Icon(
+                            Icons.location_on_rounded,
+                            color: AppTheme.primaryColor,
+                            size: 24,
+                          ),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -794,19 +907,40 @@ class _DriverDashboardState extends State<DriverDashboard> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                job['destination'] ?? '',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
+                                '${job.customerName} (${job.id})',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: Color(0xFF1E293B),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                job.deliveryAddress,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF475569),
+                                ),
                               ),
                               const SizedBox(height: 4),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.secondaryColor.withOpacity(0.08),
+                                  color: AppTheme.secondaryColor.withValues(
+                                    alpha: 0.08,
+                                  ),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  'Distance: ${job['distance'] ?? ""}',
-                                  style: const TextStyle(color: AppTheme.secondaryColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                  'Items: ${job.itemsSummary} • Dist: ${job.distance}',
+                                  style: const TextStyle(
+                                    color: AppTheme.secondaryColor,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ],
@@ -816,7 +950,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              job['payout'] ?? '',
+                              '₱${payoutVal.toStringAsFixed(2)}',
                               style: const TextStyle(
                                 color: Color(0xFF10B981),
                                 fontWeight: FontWeight.bold,
@@ -826,9 +960,15 @@ class _DriverDashboardState extends State<DriverDashboard> {
                             const SizedBox(height: 8),
                             ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
                                 backgroundColor: AppTheme.primaryColor,
-                                textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                textStyle: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                               onPressed: () => _acceptDeliveryJob(job),
                               child: const Text('Accept Job'),
@@ -849,10 +989,30 @@ class _DriverDashboardState extends State<DriverDashboard> {
 
   Widget _buildQuickActionsCard(bool isDark) {
     final actions = [
-      {'title': 'Map View', 'icon': Icons.map_rounded, 'color': const Color(0xFF009CA6), 'tab': 1},
-      {'title': 'Earnings Log', 'icon': Icons.list_alt_rounded, 'color': const Color(0xFF0284C7), 'tab': 3},
-      {'title': 'Driver Support', 'icon': Icons.support_agent_rounded, 'color': const Color(0xFF0EA5E9), 'tab': 4},
-      {'title': 'Settings', 'icon': Icons.settings_rounded, 'color': const Color(0xFF10B981), 'tab': 5},
+      {
+        'title': 'Map View',
+        'icon': Icons.map_rounded,
+        'color': const Color(0xFF0284C7),
+        'tab': 1,
+      },
+      {
+        'title': 'Earnings Log',
+        'icon': Icons.list_alt_rounded,
+        'color': const Color(0xFF0284C7),
+        'tab': 3,
+      },
+      {
+        'title': 'Driver Support',
+        'icon': Icons.support_agent_rounded,
+        'color': const Color(0xFF0EA5E9),
+        'tab': 4,
+      },
+      {
+        'title': 'Settings',
+        'icon': Icons.settings_rounded,
+        'color': const Color(0xFF10B981),
+        'tab': 5,
+      },
     ];
 
     return Container(
@@ -860,14 +1020,20 @@ class _DriverDashboardState extends State<DriverDashboard> {
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkSurface : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'Quick Actions',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1E293B),
+            ),
           ),
           const SizedBox(height: 14),
           GridView.builder(
@@ -892,18 +1058,28 @@ class _DriverDashboardState extends State<DriverDashboard> {
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: (act['color'] as Color).withOpacity(0.06),
+                    color: (act['color'] as Color).withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: (act['color'] as Color).withOpacity(0.1)),
+                    border: Border.all(
+                      color: (act['color'] as Color).withValues(alpha: 0.1),
+                    ),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(act['icon'] as IconData, color: act['color'] as Color, size: 22),
+                      Icon(
+                        act['icon'] as IconData,
+                        color: act['color'] as Color,
+                        size: 22,
+                      ),
                       const SizedBox(height: 6),
                       Text(
                         act['title'] as String,
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475569),
+                        ),
                       ),
                     ],
                   ),
@@ -922,18 +1098,28 @@ class _DriverDashboardState extends State<DriverDashboard> {
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkSurface : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: const [
-              Icon(Icons.psychology_rounded, color: AppTheme.primaryColor, size: 20),
+              Icon(
+                Icons.psychology_rounded,
+                color: AppTheme.primaryColor,
+                size: 20,
+              ),
               SizedBox(width: 8),
               Text(
                 'AI Chat Support',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1E293B),
+                ),
               ),
             ],
           ),
@@ -942,7 +1128,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
             width: double.infinity,
             padding: const EdgeInsets.all(12.0),
             decoration: BoxDecoration(
-              color: const Color(0xFFF1F9FB),
+              color: Colors.white,
               borderRadius: const BorderRadius.only(
                 topRight: Radius.circular(12),
                 bottomLeft: Radius.circular(12),
@@ -965,12 +1151,20 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     children: const [
                       Text(
                         'AquaBot',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryColor),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryColor,
+                        ),
                       ),
                       SizedBox(height: 2),
                       Text(
                         'Hello! I\'m AquaBot 💧 How can I help you today?',
-                        style: TextStyle(fontSize: 11, color: Color(0xFF475569), height: 1.3),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF475569),
+                          height: 1.3,
+                        ),
                       ),
                     ],
                   ),
@@ -1027,7 +1221,11 @@ class _DriverDashboardState extends State<DriverDashboard> {
                       _activeSidebarMenu = 4;
                     });
                   },
-                  icon: const Icon(Icons.send_rounded, size: 14, color: Colors.white),
+                  icon: const Icon(
+                    Icons.send_rounded,
+                    size: 14,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ],
@@ -1037,20 +1235,28 @@ class _DriverDashboardState extends State<DriverDashboard> {
     );
   }
 
-  // TAB 1: DELIVERIES MAP (Mock GPS routing)
+  // TAB 1: DELIVERIES MAP (Google Maps tracking)
   Widget _buildDeliveriesMapTab(bool isDark) {
+    final auth = Provider.of<AuthProvider>(context);
+    final orderProvider = Provider.of<OrderProvider>(context);
+    final user = auth.currentUser;
+    final driverId = user?.id ?? '';
+    final activeJob = orderProvider.getActiveDriverJob(driverId);
+
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_activeAcceptedJob == null)
+          if (activeJob == null)
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
                   color: isDark ? AppTheme.darkSurface : Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+                  border: Border.all(
+                    color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+                  ),
                 ),
                 child: Center(
                   child: Column(
@@ -1058,8 +1264,17 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     children: const [
                       Icon(Icons.map_rounded, size: 48, color: Colors.grey),
                       SizedBox(height: 12),
-                      Text('No active delivery job.', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-                      Text('Accept a job on the Dashboard to view route.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text(
+                        'No active delivery job.',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      Text(
+                        'Accept a job on the Dashboard to view route.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
                     ],
                   ),
                 ),
@@ -1071,26 +1286,75 @@ class _DriverDashboardState extends State<DriverDashboard> {
               decoration: BoxDecoration(
                 color: isDark ? AppTheme.darkSurface : Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+                border: Border.all(
+                  color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.location_on_rounded, color: AppTheme.primaryColor, size: 28),
+                  const Icon(
+                    Icons.location_on_rounded,
+                    color: AppTheme.primaryColor,
+                    size: 28,
+                  ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Customer: ${_activeAcceptedJob!['customer']}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Text('Address: ${_activeAcceptedJob!['destination']}', style: const TextStyle(fontSize: 12)),
-                        Text('Items: ${_activeAcceptedJob!['items']}', style: const TextStyle(fontSize: 12, color: AppTheme.primaryColor)),
+                        Text(
+                          'Customer: ${activeJob.customerName} (${activeJob.id})',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Address: ${activeJob.deliveryAddress}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        Text(
+                          'Items: ${activeJob.itemsSummary}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.primaryColor,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  ElevatedButton(
-                    onPressed: _completeActiveJob,
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
-                    child: const Text('Mark as Delivered'),
+                  Column(
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final query = Uri.encodeComponent(activeJob.deliveryAddress);
+                          final url = 'https://www.google.com/maps/search/?api=1&query=$query';
+                          final uri = Uri.parse(url);
+                          final canLaunch = await canLaunchUrl(uri);
+                          if (!mounted) return;
+                          if (canLaunch) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          } else {
+                            Helpers.showSnackBar(context, 'Could not launch Google Maps.', isError: true);
+                          }
+                        },
+                        icon: const Icon(Icons.navigation_rounded, size: 16),
+                        label: const Text('Navigate'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: () => _completeActiveJob(activeJob),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        child: const Text('Delivered'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1101,35 +1365,23 @@ class _DriverDashboardState extends State<DriverDashboard> {
                 decoration: BoxDecoration(
                   color: isDark ? AppTheme.darkSurface : Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+                  border: Border.all(
+                    color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+                  ),
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child: Stack(
-                    children: [
-                      // Render a simulated GPS map route
-                      Positioned.fill(
-                        child: CustomPaint(
-                          painter: _GPSMapRoutePainter(),
-                        ),
-                      ),
-                      const Positioned(
-                        left: 20,
-                        top: 20,
-                        child: Card(
-                          color: Colors.black87,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            child: Text('GPS Status: Calibrated (Accuracy 3m)', style: TextStyle(color: Colors.white, fontSize: 10)),
-                          ),
-                        ),
-                      ),
-                    ],
+                  child: GoogleMapWidget(
+                    destinationLat: activeJob.latitude,
+                    destinationLng: activeJob.longitude,
+                    destinationAddress: activeJob.deliveryAddress,
+                    isDriverView: true,
+                    orderId: activeJob.id,
                   ),
                 ),
               ),
             ),
-          ]
+          ],
         ],
       ),
     );
@@ -1137,36 +1389,69 @@ class _DriverDashboardState extends State<DriverDashboard> {
 
   // TAB 2: TRIP DUTY HISTORY
   Widget _buildDutyHistoryTab(bool isDark) {
+    final auth = Provider.of<AuthProvider>(context);
+    final orderProvider = Provider.of<OrderProvider>(context);
+    final user = auth.currentUser;
+    final driverId = user?.id ?? '';
+    final completedJobs = orderProvider.getDriverCompletedJobs(driverId);
+
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Trip Duty Log Sheet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'Trip Duty Log Sheet',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 16),
           Expanded(
-            child: _completedTrips.isEmpty
+            child: completedJobs.isEmpty
                 ? const Center(child: Text('No trips completed today.'))
                 : ListView.builder(
-                    itemCount: _completedTrips.length,
+                    itemCount: completedJobs.length,
                     itemBuilder: (context, index) {
-                      final trip = _completedTrips[index];
+                      final job = completedJobs[index];
+                      final payoutVal = job.totalAmount * 0.5;
+
                       return Card(
                         margin: const EdgeInsets.only(bottom: 10),
                         child: ListTile(
                           leading: const CircleAvatar(
-                            backgroundColor: Color(0xFFECF8FA),
-                            child: Icon(Icons.check_rounded, color: AppTheme.primaryColor),
+                            backgroundColor: Colors.white,
+                            child: Icon(
+                              Icons.check_rounded,
+                              color: AppTheme.primaryColor,
+                            ),
                           ),
-                          title: Text(trip['customer'] ?? 'Unknown Customer', style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text('Dest: ${trip['destination']} • Dist: ${trip['distance']}'),
+                          title: Text(
+                            '${job.customerName} (${job.id})',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text(
+                            'Dest: ${job.deliveryAddress} • Items: ${job.itemsSummary}',
+                          ),
                           trailing: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Text(trip['payout'] ?? '', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w900, fontSize: 14)),
+                              Text(
+                                '₱${payoutVal.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  color: Color(0xFF10B981),
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 14,
+                                ),
+                              ),
                               const SizedBox(height: 4),
-                              Text(trip['time'] ?? '', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                              Text(
+                                job.completedAt?.toString().split('.')[0] ??
+                                    'Completed',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -1181,6 +1466,12 @@ class _DriverDashboardState extends State<DriverDashboard> {
 
   // TAB 3: MY EARNINGS PORTAL
   Widget _buildEarningsTab(bool isDark) {
+    final auth = Provider.of<AuthProvider>(context);
+    final orderProvider = Provider.of<OrderProvider>(context);
+    final user = auth.currentUser;
+    final driverId = user?.id ?? '';
+    final earnings = orderProvider.getDriverEarnings(driverId);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24.0),
       child: Column(
@@ -1189,7 +1480,9 @@ class _DriverDashboardState extends State<DriverDashboard> {
           Container(
             padding: const EdgeInsets.all(24.0),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF009CA6), Color(0xFF0284C7)]),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0284C7), Color(0xFF0284C7)],
+              ),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -1198,9 +1491,23 @@ class _DriverDashboardState extends State<DriverDashboard> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Withdrawable Cash Balance', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Withdrawable Cash Balance',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 8),
-                    Text('₱${_todaysEarnings.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
+                    Text(
+                      '₱${earnings.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ],
                 ),
                 ElevatedButton(
@@ -1208,27 +1515,43 @@ class _DriverDashboardState extends State<DriverDashboard> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: AppTheme.primaryColor,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                   ),
-                  child: const Text('Cash Out (GCash)', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'Cash Out (GCash)',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 24),
-          const Text('Earnings Growth Metric', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text(
+            'Earnings Growth Metric',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 16),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 children: [
-                  const Text('Weekly trip earnings chart', style: TextStyle(color: Colors.grey, fontSize: 11)),
+                  const Text(
+                    'Weekly trip earnings chart',
+                    style: TextStyle(color: Colors.grey, fontSize: 11),
+                  ),
                   const SizedBox(height: 20),
                   _buildEarningMetricRow('Monday', 0.65, '₱450.00'),
                   _buildEarningMetricRow('Tuesday', 0.32, '₱220.00'),
                   _buildEarningMetricRow('Wednesday', 0.85, '₱590.00'),
-                  _buildEarningMetricRow('Thursday (Today)', 0.50, '₱${_todaysEarnings.toStringAsFixed(0)}'),
+                  _buildEarningMetricRow(
+                    'Thursday (Today)',
+                    0.50,
+                    '₱${earnings.toStringAsFixed(0)}',
+                  ),
                 ],
               ),
             ),
@@ -1243,7 +1566,13 @@ class _DriverDashboardState extends State<DriverDashboard> {
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
         children: [
-          SizedBox(width: 100, child: Text(day, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+          SizedBox(
+            width: 100,
+            child: Text(
+              day,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          ),
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(4),
@@ -1251,12 +1580,17 @@ class _DriverDashboardState extends State<DriverDashboard> {
                 value: pct,
                 minHeight: 12,
                 backgroundColor: Colors.grey.shade100,
-                valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  AppTheme.primaryColor,
+                ),
               ),
             ),
           ),
           const SizedBox(width: 12),
-          Text(val, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+          Text(
+            val,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          ),
         ],
       ),
     );
@@ -1270,7 +1604,9 @@ class _DriverDashboardState extends State<DriverDashboard> {
         decoration: BoxDecoration(
           color: isDark ? AppTheme.darkSurface : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+          border: Border.all(
+            color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+          ),
         ),
         child: Column(
           children: [
@@ -1281,9 +1617,15 @@ class _DriverDashboardState extends State<DriverDashboard> {
               ),
               child: Row(
                 children: const [
-                  CircleAvatar(backgroundColor: AppTheme.primaryColor, child: Icon(Icons.psychology_rounded, color: Colors.white)),
+                  CircleAvatar(
+                    backgroundColor: AppTheme.primaryColor,
+                    child: Icon(Icons.psychology_rounded, color: Colors.white),
+                  ),
                   SizedBox(width: 12),
-                  Text('AquaBot Driver Dispatch Support', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  Text(
+                    'AquaBot Driver Dispatch Support',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
                 ],
               ),
             ),
@@ -1296,19 +1638,29 @@ class _DriverDashboardState extends State<DriverDashboard> {
                   final msg = _supportMessages[index];
                   final isBot = msg['sender'] == 'AquaBot';
                   return Align(
-                    alignment: isBot ? Alignment.centerLeft : Alignment.centerRight,
+                    alignment: isBot
+                        ? Alignment.centerLeft
+                        : Alignment.centerRight,
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: isBot ? const Color(0xFFF1F9FB) : AppTheme.primaryColor,
+                        color: isBot
+                            ? const Color(0xFFF1F9FB)
+                            : AppTheme.primaryColor,
                         borderRadius: BorderRadius.only(
                           topLeft: const Radius.circular(12),
                           topRight: const Radius.circular(12),
-                          bottomLeft: isBot ? Radius.zero : const Radius.circular(12),
-                          bottomRight: isBot ? const Radius.circular(12) : Radius.zero,
+                          bottomLeft: isBot
+                              ? Radius.zero
+                              : const Radius.circular(12),
+                          bottomRight: isBot
+                              ? const Radius.circular(12)
+                              : Radius.zero,
                         ),
-                        border: isBot ? Border.all(color: const Color(0xFFE2F0F3)) : null,
+                        border: isBot
+                            ? Border.all(color: const Color(0xFFE2F0F3))
+                            : null,
                       ),
                       child: Text(
                         msg['message'] as String,
@@ -1338,10 +1690,15 @@ class _DriverDashboardState extends State<DriverDashboard> {
                   ),
                   const SizedBox(width: 12),
                   FloatingActionButton(
-                    onPressed: () => _sendSupportMessage(_supportInputController.text),
+                    onPressed: () =>
+                        _sendSupportMessage(_supportInputController.text),
                     backgroundColor: AppTheme.primaryColor,
                     mini: true,
-                    child: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                    child: const Icon(
+                      Icons.send_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
                   ),
                 ],
               ),
@@ -1359,25 +1716,41 @@ class _DriverDashboardState extends State<DriverDashboard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Vehicle Profile Settings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text(
+            'Vehicle Profile Settings',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(20.0),
             decoration: BoxDecoration(
               color: isDark ? AppTheme.darkSurface : Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+              border: Border.all(
+                color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 DropdownButtonFormField<String>(
-                  value: _selectedVehicleType,
-                  decoration: const InputDecoration(labelText: 'Registered Vehicle Type'),
+                  initialValue: _selectedVehicleType,
+                  decoration: const InputDecoration(
+                    labelText: 'Registered Vehicle Type',
+                  ),
                   items: const [
-                    DropdownMenuItem(value: 'Motorcycle with Rack', child: Text('Motorcycle with Rack')),
-                    DropdownMenuItem(value: 'Sidecar / Tricycle', child: Text('Sidecar / Tricycle')),
-                    DropdownMenuItem(value: 'Delivery Truck', child: Text('Delivery Truck')),
+                    DropdownMenuItem(
+                      value: 'Motorcycle with Rack',
+                      child: Text('Motorcycle with Rack'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Sidecar / Tricycle',
+                      child: Text('Sidecar / Tricycle'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Delivery Truck',
+                      child: Text('Delivery Truck'),
+                    ),
                   ],
                   onChanged: (val) {
                     if (val != null) {
@@ -1393,7 +1766,10 @@ class _DriverDashboardState extends State<DriverDashboard> {
                 const SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: () {
-                    Helpers.showSnackBar(context, 'Vehicle registration updated.');
+                    Helpers.showSnackBar(
+                      context,
+                      'Vehicle registration updated.',
+                    );
                   },
                   child: const Text('Save Details'),
                 ),
@@ -1406,68 +1782,73 @@ class _DriverDashboardState extends State<DriverDashboard> {
   }
 }
 
-// Draw a stylized GPS map tracking route lines
-class _GPSMapRoutePainter extends CustomPainter {
+
+class _SidebarItemTile extends StatefulWidget {
+  final IconData icon;
+  final String title;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final Color? textColor;
+
+  const _SidebarItemTile({
+    required this.icon,
+    required this.title,
+    required this.isSelected,
+    required this.onTap,
+    this.textColor,
+  });
+
   @override
-  void paint(Canvas canvas, Size size) {
-    final paintRoad = Paint()
-      ..color = Colors.grey.shade300
-      ..strokeWidth = 24
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
+  State<_SidebarItemTile> createState() => _SidebarItemTileState();
+}
 
-    final paintRoute = Paint()
-      ..color = const Color(0xFF0284C7)
-      ..strokeWidth = 8
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
+class _SidebarItemTileState extends State<_SidebarItemTile> {
+  bool _isHovered = false;
 
-    final paintRoadLines = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
+  @override
+  Widget build(BuildContext context) {
+    final bool active = widget.isSelected;
+    final bool highlighted = active || _isHovered;
 
-    // Draw main grid path
-    final roadPath = Path()
-      ..moveTo(20, size.height * 0.8)
-      ..lineTo(size.width * 0.4, size.height * 0.8)
-      ..lineTo(size.width * 0.4, size.height * 0.3)
-      ..lineTo(size.width - 20, size.height * 0.3);
+    Color backgroundColor;
+    if (active) {
+      backgroundColor = AppTheme.primaryColor;
+    } else if (_isHovered) {
+      backgroundColor = const Color(0xFF334155); // Dark Gray hover
+    } else {
+      backgroundColor = Colors.transparent;
+    }
 
-    final crossRoad = Path()
-      ..moveTo(size.width * 0.1, size.height * 0.3)
-      ..lineTo(size.width * 0.4, size.height * 0.3)
-      ..moveTo(size.width * 0.4, size.height * 0.8)
-      ..lineTo(size.width * 0.8, size.height * 0.8);
+    final Color contentColor = highlighted
+        ? Colors.white
+        : (widget.textColor ?? const Color(0xFF475569));
 
-    canvas.drawPath(roadPath, paintRoad);
-    canvas.drawPath(crossRoad, paintRoad);
-
-    // Draw white center lines
-    canvas.drawPath(roadPath, paintRoadLines);
-    canvas.drawPath(crossRoad, paintRoadLines);
-
-    // Draw active GPS route
-    final routePath = Path()
-      ..moveTo(50, size.height * 0.8)
-      ..lineTo(size.width * 0.4, size.height * 0.8)
-      ..lineTo(size.width * 0.4, size.height * 0.3)
-      ..lineTo(size.width * 0.75, size.height * 0.3);
-    canvas.drawPath(routePath, paintRoute);
-
-    // Draw station hub marker
-    final paintHub = Paint()..color = AppTheme.primaryColor;
-    canvas.drawCircle(Offset(50, size.height * 0.8), 12, paintHub);
-
-    // Draw destination pin
-    final paintPin = Paint()..color = const Color(0xFFEF4444);
-    canvas.drawCircle(Offset(size.width * 0.75, size.height * 0.3), 12, paintPin);
-
-    // Draw truck position
-    final paintTruck = Paint()..color = const Color(0xFF10B981);
-    canvas.drawCircle(Offset(size.width * 0.4, size.height * 0.6), 8, paintTruck);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: ListTile(
+          onTap: widget.onTap,
+          dense: true,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          leading: Icon(widget.icon, size: 20, color: contentColor),
+          title: Text(
+            widget.title,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: highlighted ? FontWeight.w800 : FontWeight.w500,
+              color: contentColor,
+            ),
+          ),
+        ),
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

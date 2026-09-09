@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/constants/app_constants.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/helpers.dart';
@@ -46,7 +45,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!mounted) return;
 
     if (success) {
-      Helpers.showSnackBar(context, 'Account created successfully! Welcome to JJAASS Water Market.');
+      Helpers.showSnackBar(context, 'Account created successfully! Welcome to JJAASSApp.');
       _routeToDashboard(_selectedRole);
     } else {
       Helpers.showSnackBar(
@@ -90,7 +89,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.08),
+                  color: AppTheme.primaryColor.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
                 child: const WaterDropletLogo(size: 50),
@@ -109,7 +108,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 4),
             Center(
               child: Text(
-                'Join JJAASS Water Market today',
+                'Join JJAASSApp today',
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey.shade500,
@@ -144,7 +143,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           boxShadow: isSelected
                               ? [
                                   BoxShadow(
-                                    color: AppTheme.primaryColor.withOpacity(0.2),
+                                    color: AppTheme.primaryColor.withValues(alpha: 0.2),
                                     blurRadius: 6,
                                     offset: const Offset(0, 2),
                                   )
@@ -284,7 +283,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 24,
                           offset: const Offset(0, 12),
                         )

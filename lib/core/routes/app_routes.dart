@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../../screens/splash/splash_screen.dart';
 import '../../screens/auth/login_screen.dart';
 import '../../screens/auth/register_screen.dart';
-import '../../screens/customer/customer_dashboard.dart';
-import '../../screens/driver/driver_dashboard.dart';
+import '../../screens/mobile_app/customer/customer_dashboard.dart';
+import '../../screens/mobile_app/driver/driver_dashboard.dart';
 import '../../screens/admin/admin_dashboard.dart';
 
 class AppRoutes {
@@ -31,9 +31,7 @@ class AppRoutes {
       default:
         return MaterialPageRoute(
           builder: (_) => Scaffold(
-            body: Center(
-              child: Text('No route defined for ${settings.name}'),
-            ),
+            body: Center(child: Text('No route defined for ${settings.name}')),
           ),
         );
     }

@@ -1,6 +1,6 @@
 class AppConstants {
   // App general info
-  static const String appName = 'JJAASS Water Market';
+  static const String appName = 'JJAASSApp';
 
   // Role Names
   static const String roleCustomer = 'customer';
@@ -26,4 +26,13 @@ class AppConstants {
   static const String supabaseUrl = 'https://iahwdukcdgtrxomigjth.supabase.co';
   static const String supabaseAnonKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlhaHdkdWtjZGd0cnhvbWlnanRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4OTI2NDMsImV4cCI6MjA5OTQ2ODY0M30.hsYowVzhwKSGdfaGn_Qlpz2dGQpky15dLNuXbmwV7V8';
+
+  // PayMongo Keys Configuration
+  // Replace these with your actual keys from the PayMongo dashboard settings
+  static const String paymongoSecretKey = 'sk_test_ktY7QC25rmHyB3Qt1jAnHtLt';
+  static const String paymongoPublicKey = 'pk_test_Y2Rq8RD2whVztowJYaEaAo7p';
+
+  // Gemini API Configuration for AquaBot Support
+  // Replace with a valid Gemini API Key to enable AI chat support. If empty or invalid, the app uses a smart offline fallback context parser.
+  static const String geminiApiKey = '';
 }

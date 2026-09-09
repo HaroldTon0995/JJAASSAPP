@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 class AppTheme {
   // Brand color definitions
-  static const Color primaryColor = Color(0xFF009CA6); // Aqua Teal
-  static const Color secondaryColor = Color(0xFF0284C7); // Light Blue / Sky
+  static const Color primaryColor = Color(0xFF0284C7); // Light Blue / Sky
+  static const Color secondaryColor = Color(0xFF38BDF8); // Soft Light Blue
   static const Color accentColor = Color(0xFF00B4D8); // Bright Cyan
 
   // Light theme background and surface colors
@@ -12,23 +12,23 @@ class AppTheme {
   static const Color lightText = Color(0xFF1E293B); // Slate 800
 
   // Dark theme background and surface colors
-  static const Color darkBg = Color(0xFF0B1E21); // Deep Slate Teal
-  static const Color darkSurface = Color(0xFF142F34); // Dark Teal Surface
-  static const Color darkText = Color(0xFFEDF8F9); // Soft Teal-White
+  static const Color darkBg = Colors.white; // White Background
+  static const Color darkSurface = Colors.white; // White Surface
+  static const Color darkText = Color(0xFF1E293B); // Slate 800
 
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      highlightColor: const Color(0xFFE0F2FE),
+      splashColor: const Color(0xFFBAE6FD),
       colorScheme: const ColorScheme.light(
         primary: primaryColor,
         secondary: secondaryColor,
         tertiary: accentColor,
-        background: lightBg,
         surface: lightSurface,
         onPrimary: Colors.white,
         onSecondary: Colors.white,
-        onBackground: lightText,
         onSurface: lightText,
       ),
       scaffoldBackgroundColor: lightBg,
@@ -37,7 +37,10 @@ class AppTheme {
         elevation: 0, // Flat design with custom thin borders is modern
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.0), // Thin border
+          side: const BorderSide(
+            color: Color(0xFFE2E8F0),
+            width: 1.0,
+          ), // Thin border
         ),
       ),
       appBarTheme: const AppBarTheme(
@@ -60,16 +63,16 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 16,
+          horizontal: 20,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -96,15 +99,15 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      highlightColor: const Color(0xFFE0F2FE),
+      splashColor: const Color(0xFFBAE6FD),
       colorScheme: const ColorScheme.dark(
         primary: primaryColor,
         secondary: secondaryColor,
         tertiary: accentColor,
-        background: darkBg,
         surface: darkSurface,
         onPrimary: Colors.white,
         onSecondary: Colors.white,
-        onBackground: darkText,
         onSurface: darkText,
       ),
       scaffoldBackgroundColor: darkBg,
@@ -136,16 +139,16 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: darkSurface,
-        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 16,
+          horizontal: 20,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Colors.white10),

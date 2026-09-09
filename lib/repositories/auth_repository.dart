@@ -11,43 +11,32 @@ abstract class AuthRepository {
 }
 
 class MockAuthRepository implements AuthRepository {
+  // Account store: normalized email -> Map of credentials and user model
+  static final Map<String, Map<String, dynamic>> _userStore = {};
+
   @override
   Future<UserModel> login({
     required String email,
     required String password,
   }) async {
-    // Simulate API network call delay
-    await Future.delayed(const Duration(milliseconds: 1000));
+    await Future.delayed(const Duration(milliseconds: 600));
 
-    // Mock validation
     if (email.isEmpty || password.isEmpty) {
       throw Exception('Email and password cannot be empty.');
     }
 
-    if (password.length < 6) {
-      throw Exception('Password must be at least 6 characters.');
+    final normalizedEmail = email.trim().toLowerCase();
+    final account = _userStore[normalizedEmail];
+
+    if (account == null) {
+      throw Exception('No account found with this email. Please sign up first.');
     }
 
-    // Auto-detect role from email pattern
-    UserRole detectedRole = UserRole.customer;
-    if (email.toLowerCase().contains('admin')) {
-      detectedRole = UserRole.admin;
-    } else if (email.toLowerCase().contains('driver')) {
-      detectedRole = UserRole.driver;
+    if (account['password'] != password) {
+      throw Exception('Incorrect password. Please try again.');
     }
 
-    // Mock successful login returning corresponding user
-    final user = UserModel(
-      id: 'usr_${email.hashCode.abs()}',
-      name: email.split('@').first.toUpperCase(),
-      email: email,
-      role: detectedRole,
-    );
-
-    // Sync user with mock list
-    ApiService.addMockUser(user);
-
-    return user;
+    return account['user'] as UserModel;
   }
 
   @override
@@ -57,7 +46,7 @@ class MockAuthRepository implements AuthRepository {
     required String password,
     required UserRole role,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 1200));
+    await Future.delayed(const Duration(milliseconds: 800));
 
     if (name.isEmpty || email.isEmpty || password.isEmpty) {
       throw Exception('All fields are required.');
@@ -67,14 +56,23 @@ class MockAuthRepository implements AuthRepository {
       throw Exception('Password must be at least 6 characters.');
     }
 
+    final normalizedEmail = email.trim().toLowerCase();
+    if (_userStore.containsKey(normalizedEmail)) {
+      throw Exception('An account with this email already exists. Please log in.');
+    }
+
     final user = UserModel(
-      id: 'usr_${email.hashCode.abs()}',
+      id: 'usr_${DateTime.now().millisecondsSinceEpoch}',
       name: name,
-      email: email,
+      email: email.trim(),
       role: role,
     );
 
-    // Add registered user directly to ApiService's mock user directory
+    _userStore[normalizedEmail] = {
+      'user': user,
+      'password': password,
+    };
+
     ApiService.addMockUser(user);
 
     return user;
@@ -82,12 +80,11 @@ class MockAuthRepository implements AuthRepository {
 
   @override
   Future<void> logout() async {
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 300));
   }
 
   @override
   Future<UserModel?> getCurrentUser() async {
-    // Return null in mock mode to let users login manually
     return null;
   }
 }
@@ -116,18 +113,12 @@ class SupabaseAuthRepository implements AuthRepository {
           .single();
       return UserModel.fromJson(profile);
     } catch (e) {
-      // Graceful fallback if database table profiles has not been created yet
-      UserRole role = UserRole.customer;
-      if (email.toLowerCase().contains('admin')) {
-        role = UserRole.admin;
-      } else if (email.toLowerCase().contains('driver')) {
-        role = UserRole.driver;
-      }
+      // Fallback if profiles table is not yet migrated
       return UserModel(
         id: user.id,
-        name: email.split('@').first.toUpperCase(),
+        name: email.split('@').first,
         email: email,
-        role: role,
+        role: UserRole.customer,
       );
     }
   }
@@ -187,19 +178,12 @@ class SupabaseAuthRepository implements AuthRepository {
             .single();
         return UserModel.fromJson(profile);
       } catch (e) {
-        // Fallback
-        UserRole role = UserRole.customer;
         final email = user.email ?? '';
-        if (email.toLowerCase().contains('admin')) {
-          role = UserRole.admin;
-        } else if (email.toLowerCase().contains('driver')) {
-          role = UserRole.driver;
-        }
         return UserModel(
           id: user.id,
-          name: email.split('@').first.toUpperCase(),
+          name: email.split('@').first,
           email: email,
-          role: role,
+          role: UserRole.customer,
         );
       }
     } catch (e) {

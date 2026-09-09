@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/routes/app_routes.dart';
-import '../../core/theme/app_theme.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/water_widgets.dart';
@@ -27,6 +26,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final isLoggedIn = await authProvider.checkSession();
+    if (!mounted) return;
 
     if (isLoggedIn) {
       final role = authProvider.currentUser?.role;
@@ -37,6 +37,7 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   void _routeToDashboard(UserRole? role) {
+    if (!mounted) return;
     if (role == null) {
       Navigator.of(context).pushReplacementNamed(AppRoutes.login);
       return;
@@ -64,8 +65,8 @@ class _SplashScreenState extends State<SplashScreen> {
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Color(0xFF005B66), // Deep teal
-              Color(0xFF009CA6), // Active Teal
+              Color(0xFF0369A1), // Deep light blue (Sky 700)
+              Color(0xFF0284C7), // Light blue (Sky 600)
             ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -95,7 +96,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       )
@@ -117,7 +118,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 Text(
                   'WATER REFILLING STATION',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 4.0,

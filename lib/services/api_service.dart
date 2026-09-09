@@ -9,22 +9,16 @@ class ApiService {
   bool get isSupabaseConfigured => (AppConstants.supabaseUrl != 'YOUR_SUPABASE_PROJECT_URL' &&
           AppConstants.supabaseAnonKey != 'YOUR_SUPABASE_PROJECT_ANON_KEY');
 
-  // Stateful mock user list for local operations when Supabase is not configured
-  static final List<UserModel> _mockUsersList = [
-    UserModel(id: 'usr_1', name: 'Alexander Pierce', email: 'alex.pierce@example.com', role: UserRole.admin),
-    UserModel(id: 'usr_2', name: 'Jane Doe', email: 'jane.doe@example.com', role: UserRole.driver),
-    UserModel(id: 'usr_3', name: 'John Smith', email: 'john.smith@example.com', role: UserRole.customer),
-    UserModel(id: 'usr_4', name: 'Emily Watson', email: 'emily.w@example.com', role: UserRole.customer),
-    UserModel(id: 'usr_5', name: 'Michael Corleone', email: 'michael.c@example.com', role: UserRole.driver),
-    UserModel(id: 'usr_6', name: 'Sarah Connor', email: 'sarah@resistance.net', role: UserRole.customer),
-    UserModel(id: 'usr_7', name: 'Bruce Wayne', email: 'batman@gotham.city', role: UserRole.admin),
-    UserModel(id: 'usr_8', name: 'Clark Kent', email: 'superman@metropolis.com', role: UserRole.driver),
-  ];
+  // Dynamic registered users list for local operations when Supabase is not configured
+  static final List<UserModel> _registeredUsersList = [];
 
-  // Expose static helper to add new users registered locally (mock database synchronization)
+  // Expose static helper to add new users registered locally
   static void addMockUser(UserModel user) {
-    if (!_mockUsersList.any((u) => u.id == user.id || u.email.toLowerCase() == user.email.toLowerCase())) {
-      _mockUsersList.add(user);
+    final index = _registeredUsersList.indexWhere((u) => u.id == user.id || u.email.toLowerCase() == user.email.toLowerCase());
+    if (index != -1) {
+      _registeredUsersList[index] = user;
+    } else {
+      _registeredUsersList.add(user);
     }
   }
 
@@ -59,9 +53,9 @@ class ApiService {
 
   // Fetching system reports for admin - queries Supabase if available
   Future<Map<String, dynamic>> getAdminDashboardData() async {
-    int totalUsersCount = _mockUsersList.length;
-    int activeDriversCount = _mockUsersList.where((u) => u.role == UserRole.driver).length;
-    int activeCustomersCount = _mockUsersList.where((u) => u.role == UserRole.customer).length;
+    int totalUsersCount = _registeredUsersList.length;
+    int activeDriversCount = _registeredUsersList.where((u) => u.role == UserRole.driver).length;
+    int activeCustomersCount = _registeredUsersList.where((u) => u.role == UserRole.customer).length;
 
     if (isSupabaseConfigured) {
       try {
@@ -77,7 +71,7 @@ class ApiService {
         final customersRes = await client.from('profiles').select().eq('role', 'customer');
         activeCustomersCount = customersRes.length;
       } catch (e) {
-        // Fallback silently to mock numbers if query fails
+        // Fallback silently if query fails
       }
     }
 
@@ -108,7 +102,7 @@ class ApiService {
       }
     }
     await Future.delayed(AppConstants.apiMockDelay);
-    return List.from(_mockUsersList);
+    return List.from(_registeredUsersList);
   }
 
   // Update a user role
@@ -123,10 +117,10 @@ class ApiService {
       }
     }
     await Future.delayed(AppConstants.apiMockDelay);
-    final index = _mockUsersList.indexWhere((u) => u.id == userId);
+    final index = _registeredUsersList.indexWhere((u) => u.id == userId);
     if (index != -1) {
-      final oldUser = _mockUsersList[index];
-      _mockUsersList[index] = UserModel(
+      final oldUser = _registeredUsersList[index];
+      _registeredUsersList[index] = UserModel(
         id: oldUser.id,
         name: oldUser.name,
         email: oldUser.email,
