@@ -20,7 +20,9 @@ void main() async {
         publishableKey: AppConstants.supabaseAnonKey,
       );
     } else {
-      debugPrint('Warning: Supabase credentials are not set. Running in fallback mode.');
+      debugPrint(
+        'Warning: Supabase credentials are not set. Running in fallback mode.',
+      );
     }
   } catch (e) {
     debugPrint('Supabase initialization failed: $e. Running in fallback mode.');

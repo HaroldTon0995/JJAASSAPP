@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/constants/app_constants.dart';
 import '../models/order_model.dart';
+import '../services/location_service.dart';
 
 class OrderProvider extends ChangeNotifier {
   final List<OrderModel> _orders = [];
   final Map<String, double> _driverCashedOutEarnings = {};
   bool _isLoading = false;
+  Timer? _pollingTimer;
 
   // Shared dynamic water products catalog
   final List<Map<String, dynamic>> _waterProducts = [
@@ -16,8 +18,8 @@ class OrderProvider extends ChangeNotifier {
       'id': 'prod_purified',
       'name': '19L Purified Water',
       'price': 50.0,
-      'stock': 127.0, // available gallons
-      'capacity': 150.0, // capacity
+      'stock': 127.0,
+      'capacity': 150.0,
       'color': Colors.blue,
       'icon': Icons.water_drop_rounded,
     },
@@ -83,9 +85,40 @@ class OrderProvider extends ChangeNotifier {
   StreamSubscription? _ordersSubscription;
 
   OrderProvider() {
-    _listenToSupabaseOrders();
-    if (!_isSupabaseConfigured) {
+    if (_isSupabaseConfigured) {
+      // 1. Initial direct fetch
+      fetchSupabaseOrders();
+      // 2. Realtime Stream
+      _listenToSupabaseOrders();
+      // 3. Fallback sync polling every 3 seconds for guaranteed cross-device sync
+      _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+        fetchSupabaseOrders(silent: true);
+      });
+    } else {
       _seedMockOrders();
+    }
+  }
+
+  Future<void> fetchSupabaseOrders({bool silent = false}) async {
+    if (!_isSupabaseConfigured) return;
+    try {
+      final client = Supabase.instance.client;
+      final List<dynamic> response = await client.from('orders').select();
+      
+      final fetched = response
+          .map((item) => OrderModel.fromJson(item as Map<String, dynamic>))
+          .toList();
+
+      // Sort newest first
+      fetched.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      if (fetched.isNotEmpty || _orders.isEmpty) {
+        _orders.clear();
+        _orders.addAll(fetched);
+        if (!silent) notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Supabase direct fetch orders error: $e');
     }
   }
 
@@ -96,12 +129,15 @@ class OrderProvider extends ChangeNotifier {
       _ordersSubscription = client
           .from('orders')
           .stream(primaryKey: ['id'])
-          .order('created_at', ascending: false)
           .listen(
             (List<Map<String, dynamic>> response) {
               final fetched = response
                   .map((item) => OrderModel.fromJson(item))
                   .toList();
+              
+              // Sort newest first
+              fetched.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
               _orders.clear();
               _orders.addAll(fetched);
               notifyListeners();
@@ -118,6 +154,7 @@ class OrderProvider extends ChangeNotifier {
   @override
   void dispose() {
     _ordersSubscription?.cancel();
+    _pollingTimer?.cancel();
     super.dispose();
   }
 
@@ -166,7 +203,31 @@ class OrderProvider extends ChangeNotifier {
     if (_isSupabaseConfigured) {
       try {
         final client = Supabase.instance.client;
-        await client.from('orders').insert(newOrder.toJson());
+        
+        // Use clean JSON with camelCase and standard columns
+        final insertMap = {
+          'id': newOrder.id,
+          'txnId': newOrder.txnId,
+          'customerId': newOrder.customerId,
+          'customerName': newOrder.customerName,
+          'customerPhone': newOrder.customerPhone,
+          'deliveryAddress': newOrder.deliveryAddress,
+          'waterType': newOrder.waterType,
+          'quantity': newOrder.quantity,
+          'pricePerUnit': newOrder.pricePerUnit,
+          'totalAmount': newOrder.totalAmount,
+          'paymentMethod': newOrder.paymentMethod,
+          'paymentStatus': newOrder.paymentStatus,
+          'orderStatus': newOrder.orderStatus.name,
+          'createdAt': newOrder.createdAt.toIso8601String(),
+          'distance': newOrder.distance,
+        };
+
+        await client.from('orders').insert(insertMap);
+        debugPrint('Successfully inserted order ${newOrder.id} to Supabase!');
+        
+        // Refresh immediately
+        await fetchSupabaseOrders(silent: true);
       } catch (e) {
         debugPrint('Supabase insert failed: $e');
       }
@@ -197,6 +258,13 @@ class OrderProvider extends ChangeNotifier {
     _orders[index].driverName = driverName;
     _orders[index].orderStatus = OrderStatus.onDelivery;
 
+    // Start live GPS broadcasting for driver
+    LocationService().startBroadcasting(
+      driverId: driverId,
+      driverName: driverName,
+      orderId: orderId,
+    );
+
     if (_isSupabaseConfigured) {
       try {
         final client = Supabase.instance.client;
@@ -208,6 +276,7 @@ class OrderProvider extends ChangeNotifier {
               'orderStatus': OrderStatus.onDelivery.name,
             })
             .eq('id', orderId);
+        await fetchSupabaseOrders(silent: true);
       } catch (e) {
         debugPrint('Supabase accept order update error: $e');
       }
@@ -230,6 +299,9 @@ class OrderProvider extends ChangeNotifier {
     _orders[index].paymentStatus = 'Paid';
     _orders[index].completedAt = DateTime.now();
 
+    // Stop GPS broadcasting
+    LocationService().stopBroadcasting();
+
     if (_isSupabaseConfigured) {
       try {
         final client = Supabase.instance.client;
@@ -241,6 +313,7 @@ class OrderProvider extends ChangeNotifier {
               'completedAt': DateTime.now().toIso8601String(),
             })
             .eq('id', orderId);
+        await fetchSupabaseOrders(silent: true);
       } catch (e) {
         debugPrint('Supabase complete order update error: $e');
       }
@@ -275,6 +348,7 @@ class OrderProvider extends ChangeNotifier {
             .from('orders')
             .update({'orderStatus': OrderStatus.confirmed.name})
             .eq('id', orderId);
+        await fetchSupabaseOrders(silent: true);
       } catch (e) {
         debugPrint('Supabase confirm order update error: $e');
       }
@@ -296,6 +370,7 @@ class OrderProvider extends ChangeNotifier {
             .from('orders')
             .update({'paymentStatus': 'Paid'})
             .eq('id', orderId);
+        await fetchSupabaseOrders(silent: true);
       } catch (e) {
         debugPrint('Supabase mark order paid error: $e');
       }
@@ -327,6 +402,7 @@ class OrderProvider extends ChangeNotifier {
               'orderStatus': OrderStatus.assigned.name,
             })
             .eq('id', orderId);
+        await fetchSupabaseOrders(silent: true);
       } catch (e) {
         debugPrint('Supabase assign driver update error: $e');
       }
@@ -348,6 +424,7 @@ class OrderProvider extends ChangeNotifier {
     if (newStatus == OrderStatus.completed) {
       _orders[index].paymentStatus = 'Paid';
       _orders[index].completedAt = DateTime.now();
+      LocationService().stopBroadcasting();
     }
     if (driverId != null) {
       _orders[index].driverId = driverId;
@@ -368,6 +445,7 @@ class OrderProvider extends ChangeNotifier {
         if (driverName != null) updateData['driverName'] = driverName;
 
         await client.from('orders').update(updateData).eq('id', orderId);
+        await fetchSupabaseOrders(silent: true);
       } catch (e) {
         debugPrint('Supabase admin update order error: $e');
       }
@@ -394,7 +472,7 @@ class OrderProvider extends ChangeNotifier {
     final completed = getCustomerOrders(
       customerId,
     ).where((o) => o.orderStatus == OrderStatus.completed);
-    int points = 100; // Welcome points
+    int points = 100;
     for (var o in completed) {
       points += o.quantity * 10;
     }
@@ -407,7 +485,8 @@ class OrderProvider extends ChangeNotifier {
     return _orders
         .where(
           (o) =>
-              o.orderStatus == OrderStatus.assigned && o.driverId == driverId,
+              (o.orderStatus == OrderStatus.assigned || o.orderStatus == OrderStatus.confirmed) &&
+              (o.driverId == driverId || o.driverId == null || o.driverId!.isEmpty),
         )
         .toList();
   }
@@ -434,7 +513,6 @@ class OrderProvider extends ChangeNotifier {
     final completed = getDriverCompletedJobs(driverId);
     double gross = 0.0;
     for (var job in completed) {
-      // Driver gets 50% payout per delivery item total
       gross += job.totalAmount * 0.5;
     }
     final cashedOut = _driverCashedOutEarnings[driverId] ?? 0.0;
@@ -466,180 +544,6 @@ class OrderProvider extends ChangeNotifier {
   }
 
   void _seedMockOrders() {
-    final now = DateTime.now();
-    final random = Random();
-
-    // Seed 15 mock orders spanning different times
-    final List<Map<String, dynamic>> seeds = [
-      // Today
-      {
-        'offset': const Duration(hours: 2),
-        'qty': 2,
-        'type': '19L Purified',
-        'price': 50.0,
-        'status': OrderStatus.completed,
-        'pay': 'Paid',
-      },
-      {
-        'offset': const Duration(hours: 5),
-        'qty': 4,
-        'type': '19L Alkaline',
-        'price': 60.0,
-        'status': OrderStatus.completed,
-        'pay': 'Paid',
-      },
-      {
-        'offset': const Duration(hours: 10),
-        'qty': 1,
-        'type': '19L Purified',
-        'price': 50.0,
-        'status': OrderStatus.pending,
-        'pay': 'Pending',
-      },
-      // Yesterday
-      {
-        'offset': const Duration(days: 1, hours: 3),
-        'qty': 3,
-        'type': '19L Alkaline',
-        'price': 60.0,
-        'status': OrderStatus.completed,
-        'pay': 'Paid',
-      },
-      {
-        'offset': const Duration(days: 1, hours: 6),
-        'qty': 2,
-        'type': '19L Purified',
-        'price': 50.0,
-        'status': OrderStatus.completed,
-        'pay': 'Paid',
-      },
-      // Earlier this week
-      {
-        'offset': const Duration(days: 3),
-        'qty': 5,
-        'type': '19L Purified',
-        'price': 50.0,
-        'status': OrderStatus.completed,
-        'pay': 'Paid',
-      },
-      {
-        'offset': const Duration(days: 4),
-        'qty': 3,
-        'type': '19L Alkaline',
-        'price': 60.0,
-        'status': OrderStatus.completed,
-        'pay': 'Paid',
-      },
-      // Earlier this month
-      {
-        'offset': const Duration(days: 10),
-        'qty': 2,
-        'type': '19L Alkaline',
-        'price': 60.0,
-        'status': OrderStatus.completed,
-        'pay': 'Paid',
-      },
-      {
-        'offset': const Duration(days: 18),
-        'qty': 6,
-        'type': '19L Purified',
-        'price': 50.0,
-        'status': OrderStatus.completed,
-        'pay': 'Paid',
-      },
-      {
-        'offset': const Duration(days: 22),
-        'qty': 4,
-        'type': '19L Purified',
-        'price': 50.0,
-        'status': OrderStatus.completed,
-        'pay': 'Paid',
-      },
-      // Last month
-      {
-        'offset': const Duration(days: 45),
-        'qty': 8,
-        'type': '19L Alkaline',
-        'price': 60.0,
-        'status': OrderStatus.completed,
-        'pay': 'Paid',
-      },
-      {
-        'offset': const Duration(days: 52),
-        'qty': 5,
-        'type': '19L Purified',
-        'price': 50.0,
-        'status': OrderStatus.completed,
-        'pay': 'Paid',
-      },
-      // Earlier this year
-      {
-        'offset': const Duration(days: 110),
-        'qty': 10,
-        'type': '19L Alkaline',
-        'price': 60.0,
-        'status': OrderStatus.completed,
-        'pay': 'Paid',
-      },
-      {
-        'offset': const Duration(days: 180),
-        'qty': 12,
-        'type': '19L Purified',
-        'price': 50.0,
-        'status': OrderStatus.completed,
-        'pay': 'Paid',
-      },
-      {
-        'offset': const Duration(days: 260),
-        'qty': 7,
-        'type': '19L Alkaline',
-        'price': 60.0,
-        'status': OrderStatus.completed,
-        'pay': 'Paid',
-      },
-    ];
-
-    for (var i = 0; i < seeds.length; i++) {
-      final seed = seeds[i];
-      final date = now.subtract(seed['offset'] as Duration);
-      final randomId = 1000 + random.nextInt(8999);
-      final total = (seed['qty'] as int) * (seed['price'] as double);
-
-      _orders.add(
-        OrderModel(
-          id: '#ORD-99$randomId',
-          txnId: '#TXN-77$randomId',
-          customerId: 'usr_mock_${10 + i}',
-          customerName: [
-            'Maria Santos',
-            'John Doe',
-            'Juan Dela Cruz',
-            'Sarah Lim',
-            'David Tan',
-            'Ana Reyes',
-          ][i % 6],
-          customerPhone: '+63 917 123 ${4000 + i}',
-          deliveryAddress: [
-            '456 Quezon Ave, Manila',
-            '789 Taft Ave, Pasay',
-            '12 Magsaysay Blvd, Quezon City',
-            '88 Shaw Blvd, Mandaluyong',
-          ][i % 4],
-          waterType: seed['type'] as String,
-          quantity: seed['qty'] as int,
-          pricePerUnit: seed['price'] as double,
-          totalAmount: total,
-          paymentMethod: i % 2 == 0 ? 'GCash' : 'Cash on Delivery',
-          paymentStatus: seed['pay'] as String,
-          orderStatus: seed['status'] as OrderStatus,
-          createdAt: date,
-          completedAt: seed['status'] == OrderStatus.completed
-              ? date.add(const Duration(minutes: 45))
-              : null,
-          distance:
-              '${(1.2 + random.nextDouble() * 2.5).toStringAsFixed(1)} km',
-        ),
-      );
-    }
+    // Fallback seed when Supabase is not configured
   }
 }

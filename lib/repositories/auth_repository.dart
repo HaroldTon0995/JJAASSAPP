@@ -5,7 +5,12 @@ import '../services/api_service.dart';
 
 abstract class AuthRepository {
   Future<UserModel> login({required String email, required String password});
-  Future<UserModel> signUp({required String name, required String email, required String password, required UserRole role});
+  Future<UserModel> signUp({
+    required String name,
+    required String email,
+    required String password,
+    required UserRole role,
+  });
   Future<void> logout();
   Future<UserModel?> getCurrentUser();
 }
@@ -29,7 +34,9 @@ class MockAuthRepository implements AuthRepository {
     final account = _userStore[normalizedEmail];
 
     if (account == null) {
-      throw Exception('No account found with this email. Please sign up first.');
+      throw Exception(
+        'No account found with this email. Please sign up first.',
+      );
     }
 
     if (account['password'] != password) {
@@ -58,7 +65,9 @@ class MockAuthRepository implements AuthRepository {
 
     final normalizedEmail = email.trim().toLowerCase();
     if (_userStore.containsKey(normalizedEmail)) {
-      throw Exception('An account with this email already exists. Please log in.');
+      throw Exception(
+        'An account with this email already exists. Please log in.',
+      );
     }
 
     final user = UserModel(
@@ -68,10 +77,7 @@ class MockAuthRepository implements AuthRepository {
       role: role,
     );
 
-    _userStore[normalizedEmail] = {
-      'user': user,
-      'password': password,
-    };
+    _userStore[normalizedEmail] = {'user': user, 'password': password};
 
     ApiService.addMockUser(user);
 
@@ -93,7 +99,10 @@ class SupabaseAuthRepository implements AuthRepository {
   SupabaseClient get _client => Supabase.instance.client;
 
   @override
-  Future<UserModel> login({required String email, required String password}) async {
+  Future<UserModel> login({
+    required String email,
+    required String password,
+  }) async {
     final response = await _client.auth.signInWithPassword(
       email: email,
       password: password,

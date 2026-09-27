@@ -228,12 +228,17 @@ class _LoginScreenState extends State<LoginScreen> {
             child: isDesktop
                 ? Container(
                     width: 450,
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 40,
+                      vertical: 48,
+                    ),
                     decoration: BoxDecoration(
                       color: isDark ? AppTheme.darkSurface : Colors.white,
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(
-                        color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+                        color: isDark
+                            ? Colors.white10
+                            : const Color(0xFFE2E8F0),
                         width: 1.0,
                       ),
                       boxShadow: [
@@ -241,7 +246,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 24,
                           offset: const Offset(0, 12),
-                        )
+                        ),
                       ],
                     ),
                     child: formContent(),
