@@ -18,7 +18,7 @@ class CustomerColors {
   static const Color surfaceDark = Color(0xFF1E293B);
   static const Color border = Color(0xFFE2E8F0);
   static const Color borderLight = Color(0xFFF1F5F9);
-  static const Color borderDark = Colors.white10;
+  static const Color borderDark = Color(0xFF334155);
 
   // Typography
   static const Color textMain = Color(0xFF0F172A);
@@ -346,40 +346,65 @@ class CustomerStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(CustomerDimensions.paddingLarge),
+      constraints: const BoxConstraints(minHeight: 112),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: CustomerDecorations.card(isDark: isDark),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(title, style: CustomerTextStyles.statLabel),
-                const SizedBox(height: 8),
-                Text(
-                  value,
-                  style: CustomerTextStyles.statValue.copyWith(
-                    color: isDark ? Colors.white : CustomerColors.textMain,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    title,
+                    style: CustomerTextStyles.statLabel.copyWith(
+                      color: isDark ? const Color(0xFF94A3B8) : CustomerColors.textMuted,
+                    ),
+                    maxLines: 1,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: CustomerTextStyles.statValue.copyWith(
+                      color: isDark ? Colors.white : CustomerColors.textMain,
+                    ),
+                    maxLines: 1,
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: isDark ? Colors.grey.shade400 : CustomerColors.textSubtle,
-                    fontSize: 11,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: isDark ? const Color(0xFF64748B) : CustomerColors.textSubtle,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
                   ),
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
+              color: color.withValues(alpha: isDark ? 0.18 : 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: color, size: 28),
+            child: Icon(icon, color: color, size: 26),
           ),
         ],
       ),

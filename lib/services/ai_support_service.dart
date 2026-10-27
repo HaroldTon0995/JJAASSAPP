@@ -8,6 +8,7 @@ import '../providers/order_provider.dart';
 
 class AiSupportService {
   static const String _defaultModel = 'gemini-1.5-flash';
+  static const String marketAddress = 'Pili Iraya, Bacacay, Albay';
   static const double _depotLat = 14.5995;
   static const double _depotLng = 120.9842;
 
@@ -75,7 +76,8 @@ class AiSupportService {
     );
 
     final String systemInstructions = 
-      "You are AquaBot 💧, the premium AI support desk agent for 'JJAASSApp' (a water delivery service). "
+      "You are AquaBot 💧, the premium AI support desk agent for 'JJAASSApp' (a water delivery service of JJAASS Water Market). "
+      "The JJAASS Water Market is located at: $marketAddress. Use this address whenever asked about the store location, address, or how to find or visit us.\n"
       "You are chatting with a user named '$userName' who is a ${isDriver ? 'Driver' : isAdmin ? 'Admin' : 'Customer'}.\n\n"
       "Here is the real-time application context data:\n"
       "$contextData\n\n"
@@ -123,6 +125,19 @@ class AiSupportService {
     required String userName,
     required OrderProvider orderProvider,
   }) {
+    if (query.contains('address') ||
+        query.contains('location') ||
+        query.contains('located') ||
+        query.contains('where are you') ||
+        query.contains('store') ||
+        query.contains('shop') ||
+        query.contains('visit') ||
+        query.contains('pickup') ||
+        query.contains('pick up') ||
+        query.contains('market')) {
+      return "📍 **JJAASS Water Market**\n\nWe are located at **$marketAddress**.\n\nFeel free to visit us or order water for delivery right from the app!";
+    }
+
     if (isAdmin) {
       // Admin dashboard inquiries
       if (query.contains('revenue') || query.contains('sales') || query.contains('earn')) {
@@ -191,6 +206,9 @@ class AiSupportService {
     required OrderProvider orderProvider,
   }) {
     final buffer = StringBuffer();
+    buffer.writeln("=== BUSINESS INFORMATION ===");
+    buffer.writeln("Business Name: JJAASS Water Market");
+    buffer.writeln("Address: $marketAddress");
     if (isAdmin) {
       buffer.writeln("=== SYSTEM ANALYTICS ===");
       buffer.writeln("Total System Revenue: ₱${orderProvider.getTotalRevenue().toStringAsFixed(2)}");

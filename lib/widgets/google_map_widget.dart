@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../core/theme/app_theme.dart';
+import '../services/tracking_service.dart';
 
 class GoogleMapWidget extends StatefulWidget {
   final double? destinationLat;
@@ -29,6 +30,8 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
   GoogleMapController? _mapController;
   Position? _currentPosition;
   StreamSubscription<Position>? _positionStreamSub;
+  StreamSubscription<DriverLocation>? _trackingStreamSub;
+  bool _hasRealLocation = false;
   
   // Default coordinates (Manila, Philippines) if none provided
   static const LatLng _defaultManila = LatLng(14.5995, 120.9842);
@@ -58,6 +61,7 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
 
   @override
   void dispose() {
+    _trackingStreamSub?.cancel();
     _positionStreamSub?.cancel();
     _mockMovementTimer?.cancel();
     _mapController?.dispose();
@@ -66,9 +70,26 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
 
   Future<void> _initLocationTracking() async {
     if (!widget.isDriverView) {
-      // For customers, we simulate the driver moving towards them
-      _startMockDriverMovement();
-      setState(() => _isLoadingLocation = false);
+      // Customer & Admin view: listen to live real-time GPS stream from Supabase
+      _trackingStreamSub = TrackingService.watch(widget.orderId).listen((loc) {
+        if (mounted) {
+          _hasRealLocation = true;
+          _mockMovementTimer?.cancel();
+          setState(() {
+            _driverCoord = loc.position;
+            _isLoadingLocation = false;
+          });
+          _zoomToFitMarkers();
+        }
+      });
+
+      // If no live broadcast is active yet, start graceful simulation as fallback preview
+      Timer(const Duration(seconds: 3), () {
+        if (mounted && !_hasRealLocation) {
+          _startMockDriverMovement();
+          setState(() => _isLoadingLocation = false);
+        }
+      });
       return;
     }
 
@@ -110,9 +131,17 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
           _isLoadingLocation = false;
         });
         _zoomToFitMarkers();
+
+        // Broadcast to Supabase Realtime
+        TrackingService.publish(
+          orderId: widget.orderId,
+          driverId: 'driver',
+          lat: pos.latitude,
+          lng: pos.longitude,
+        );
       }
 
-      // Subscribe to real-time driver coordinates
+      // Subscribe to real-time driver coordinates & broadcast each movement
       _positionStreamSub = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
@@ -125,6 +154,14 @@ class _GoogleMapWidgetState extends State<GoogleMapWidget> {
             _driverCoord = LatLng(position.latitude, position.longitude);
           });
           _zoomToFitMarkers();
+
+          // Broadcast live coordinates to Supabase Realtime
+          TrackingService.publish(
+            orderId: widget.orderId,
+            driverId: 'driver',
+            lat: position.latitude,
+            lng: position.longitude,
+          );
         }
       });
 

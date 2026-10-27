@@ -252,8 +252,16 @@ class _GCashPaymentModalState extends State<GCashPaymentModal>
         _handlePaymentSuccess();
         return;
       }
+
+      // If manual check didn't automatically verify from PayMongo, prompt user
+      if (!isBackgroundPoll && mounted) {
+        _showManualConfirmPrompt();
+      }
     } catch (e) {
       debugPrint('Error verifying GCash status: $e');
+      if (!isBackgroundPoll && mounted) {
+        _showManualConfirmPrompt();
+      }
     } finally {
       if (mounted && !isBackgroundPoll && !_isSuccess) {
         setState(() {
@@ -262,6 +270,74 @@ class _GCashPaymentModalState extends State<GCashPaymentModal>
         });
       }
     }
+  }
+
+  void _showManualConfirmPrompt() {
+    final textColor = widget.isDark ? Colors.white : const Color(0xFF0F172A);
+    final subtextColor = widget.isDark ? Colors.grey.shade400 : const Color(0xFF475569);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: widget.isDark ? AppTheme.darkSurface : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: gcashBlue.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check_circle_outline, color: gcashBlue, size: 22),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Confirm Payment',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: textColor,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Have you completed the payment of ₱${widget.order.totalAmount.toStringAsFixed(2)} via GCash for order ${widget.order.id}?',
+              style: TextStyle(fontSize: 13, color: textColor, height: 1.4),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Tap "Yes, I Have Paid" to immediately verify and transmit this transaction to the Admin Console & Delivery Rider.',
+              style: TextStyle(fontSize: 11, color: subtextColor, height: 1.3),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Not Yet', style: TextStyle(color: subtextColor)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _handlePaymentSuccess();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: gcashBlue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Yes, I Have Paid', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handlePaymentSuccess() async {
@@ -691,11 +767,13 @@ class _GCashPaymentModalState extends State<GCashPaymentModal>
           ),
           child: Column(
             children: [
-              _buildRow('Order ID', '#${widget.order.id}', textColor, subtextColor),
+              _buildRow('Order ID', widget.order.id, textColor, subtextColor),
+              const SizedBox(height: 10),
+              _buildRow('Transaction Ref', widget.order.txnId, textColor, subtextColor),
               const SizedBox(height: 10),
               _buildRow('Items', '${widget.order.quantity}x ${widget.order.waterType}', textColor, subtextColor),
               const SizedBox(height: 10),
-              _buildRow('Payment Method', 'GCash', textColor, subtextColor),
+              _buildRow('Payment Method', 'GCash (Verified)', gcashBlue, subtextColor, isBold: true),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 10),
                 child: Divider(height: 1),

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/data/ph_provinces.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/helpers.dart';
@@ -10,10 +11,13 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/order_provider.dart';
 import '../../../services/api_service.dart';
 import '../../../services/payment_service.dart';
+import '../../../services/psgc_service.dart';
 import '../../../services/ai_support_service.dart';
 import '../../../widgets/water_widgets.dart';
 import '../../../widgets/google_map_widget.dart';
 import '../../../widgets/gcash_payment_modal.dart';
+import '../../../widgets/location_picker_modal.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'customer_styles.dart';
 
 class CustomerDashboard extends StatefulWidget {
@@ -33,9 +37,16 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   // Order Water Form States
   String _selectedWaterType = '19L Purified Water';
   int _orderQuantity = 2;
-  final TextEditingController _orderAddressController = TextEditingController(
-    text: '123 Rizal Ave, Brgy. San Isidro',
-  );
+  String? _selectedProvince;
+  String? _selectedCityCode;
+  String? _selectedBarangayCode;
+  List<PsgcPlace> _cities = [];
+  List<PsgcPlace> _barangays = [];
+  bool _loadingCities = false;
+  bool _loadingBarangays = false;
+  final TextEditingController _deliveryNoteController = TextEditingController();
+  final TextEditingController _orderAddressController = TextEditingController();
+  LatLng? _pinnedLocation;
   String _selectedPaymentMethod = 'Cash on Delivery';
 
   // Support Chat States
@@ -59,13 +70,14 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     super.initState();
     _profileNameController = TextEditingController(text: 'Customer User');
     _profilePhoneController = TextEditingController(text: '+63 912 345 6789');
-    
+
     // Initialize selected water type dynamically from OrderProvider catalog
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final orderProvider = Provider.of<OrderProvider>(context, listen: false);
       if (orderProvider.waterProducts.isNotEmpty) {
         setState(() {
-          _selectedWaterType = orderProvider.waterProducts.first['name'] as String;
+          _selectedWaterType =
+              orderProvider.waterProducts.first['name'] as String;
         });
       }
     });
@@ -76,6 +88,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   @override
   void dispose() {
     _orderAddressController.dispose();
+    _deliveryNoteController.dispose();
     _chatInputController.dispose();
     _chatScrollController.dispose();
     _profileNameController.dispose();
@@ -109,11 +122,118 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     }
   }
 
+  InputDecoration _boxedInputDecoration({String? hint, String? label}) {
+    OutlineInputBorder border(Color color, [double width = 1.2]) =>
+        OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: color, width: width),
+        );
+    return InputDecoration(
+      hintText: hint,
+      labelText: label,
+      labelStyle: const TextStyle(color: Color(0xFF475569)),
+      filled: true,
+      fillColor: Colors.transparent,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: border(const Color(0xFFCBD5E1)),
+      enabledBorder: border(const Color(0xFFCBD5E1)),
+      focusedBorder: border(AppTheme.primaryColor, 2),
+    );
+  }
+
+  Future<void> _onProvinceChanged(String? provinceName) async {
+    if (provinceName == null) return;
+    final province = phProvinces.firstWhere((p) => p.name == provinceName);
+    setState(() {
+      _selectedProvince = provinceName;
+      _selectedCityCode = null;
+      _selectedBarangayCode = null;
+      _cities = [];
+      _barangays = [];
+      _loadingCities = true;
+    });
+    try {
+      final cities = await PsgcService.getCitiesMunicipalities(province.code);
+      if (!mounted || _selectedProvince != provinceName) return;
+      setState(() {
+        _cities = cities;
+        _loadingCities = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingCities = false);
+      Helpers.showSnackBar(
+        context,
+        'Could not load cities/municipalities. Check your internet connection.',
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _onCityChanged(String? cityCode) async {
+    if (cityCode == null) return;
+    setState(() {
+      _selectedCityCode = cityCode;
+      _selectedBarangayCode = null;
+      _barangays = [];
+      _loadingBarangays = true;
+    });
+    try {
+      final barangays = await PsgcService.getBarangays(cityCode);
+      if (!mounted || _selectedCityCode != cityCode) return;
+      setState(() {
+        _barangays = barangays;
+        _loadingBarangays = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingBarangays = false);
+      Helpers.showSnackBar(
+        context,
+        'Could not load barangays. Check your internet connection.',
+        isError: true,
+      );
+    }
+  }
+
+  String _composeAddress() {
+    final cityName = _cities.firstWhere((c) => c.code == _selectedCityCode).name;
+    final barangayName = _barangays
+        .firstWhere((b) => b.code == _selectedBarangayCode)
+        .name;
+    return '${_orderAddressController.text.trim()}, Brgy. $barangayName, '
+        '$cityName, $_selectedProvince';
+  }
+
   void _submitWaterOrder() async {
+    if (_selectedProvince == null) {
+      Helpers.showSnackBar(
+        context,
+        'Please select a province.',
+        isError: true,
+      );
+      return;
+    }
+    if (_selectedCityCode == null) {
+      Helpers.showSnackBar(
+        context,
+        'Please select a city / municipality.',
+        isError: true,
+      );
+      return;
+    }
+    if (_selectedBarangayCode == null) {
+      Helpers.showSnackBar(
+        context,
+        'Please select a barangay.',
+        isError: true,
+      );
+      return;
+    }
     if (_orderAddressController.text.trim().isEmpty) {
       Helpers.showSnackBar(
         context,
-        'Please enter a delivery address.',
+        'Please enter your house no. / street.',
         isError: true,
       );
       return;
@@ -136,17 +256,20 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       customerPhone: _profilePhoneController.text.isNotEmpty
           ? _profilePhoneController.text
           : '+63 912 345 6789',
-      deliveryAddress: _orderAddressController.text.trim(),
+      deliveryAddress: _composeAddress(),
       waterType: waterTypeName,
       quantity: _orderQuantity,
       pricePerUnit: pricePerJug,
       paymentMethod: _selectedPaymentMethod,
+      deliveryNote: _deliveryNoteController.text.trim(),
+      latitude: _pinnedLocation?.latitude,
+      longitude: _pinnedLocation?.longitude,
     );
 
     if (mounted) {
       Helpers.showSnackBar(
         context,
-        'Order ${newOrder.id} placed successfully! +${_orderQuantity * 10} points earned.',
+        'Order ${newOrder.id} placed successfully!',
       );
       setState(() {
         _selectedTab = 2; // Route directly to My Deliveries
@@ -154,7 +277,10 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       });
 
       if (_selectedPaymentMethod == 'GCash') {
-        _showGcashPaymentDialog(newOrder, Theme.of(context).brightness == Brightness.dark);
+        _showGcashPaymentDialog(
+          newOrder,
+          Theme.of(context).brightness == Brightness.dark,
+        );
       }
     }
   }
@@ -207,7 +333,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
 
       if (mounted) {
         setState(() {
-          if (_chatMessages.isNotEmpty && _chatMessages.last['message'] == 'Thinking...') {
+          if (_chatMessages.isNotEmpty &&
+              _chatMessages.last['message'] == 'Thinking...') {
             _chatMessages.removeLast();
           }
           _chatMessages.add({'sender': 'AquaBot', 'message': response});
@@ -218,12 +345,14 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          if (_chatMessages.isNotEmpty && _chatMessages.last['message'] == 'Thinking...') {
+          if (_chatMessages.isNotEmpty &&
+              _chatMessages.last['message'] == 'Thinking...') {
             _chatMessages.removeLast();
           }
           _chatMessages.add({
             'sender': 'AquaBot',
-            'message': 'Sorry, I encountered an issue retrieving a response. Please check your connection and try again.'
+            'message':
+                'Sorry, I encountered an issue retrieving a response. Please check your connection and try again.',
           });
           _isChatLoading = false;
         });
@@ -242,23 +371,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         );
       }
     });
-  }
-
-  void _redeemRewardsCoupon(String couponName, int pointsCost) {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    final user = auth.currentUser;
-    final rewardPoints = orderProvider.getCustomerRewardPoints(user?.id ?? '');
-
-    if (rewardPoints < pointsCost) {
-      Helpers.showSnackBar(
-        context,
-        'Insufficient loyalty reward points.',
-        isError: true,
-      );
-      return;
-    }
-    Helpers.showSnackBar(context, 'Successfully redeemed: $couponName!');
   }
 
   Future<void> _handleLogout() async {
@@ -411,37 +523,14 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             ),
           ),
           const SizedBox(width: 16),
-          PopupMenuButton<String>(
-            onSelected: (val) {
-              if (val == 'logout') {
-                _handleLogout();
-              }
+          InkWell(
+            onTap: () {
+              setState(() {
+                _selectedTab = 5;
+                _activeSidebarMenu = 5;
+              });
             },
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            itemBuilder: (context) => [
-              const PopupMenuItem<String>(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.logout_rounded,
-                      color: Color(0xFFEF4444),
-                      size: 18,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      'Log Out',
-                      style: TextStyle(
-                        color: Color(0xFFEF4444),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            borderRadius: BorderRadius.circular(18),
             child: CircleAvatar(
               radius: 18,
               backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.12),
@@ -470,10 +559,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       case 3:
         return 'Payment Transactions History';
       case 4:
-        return 'Loyalty Points Store';
-      case 5:
         return 'AquaBot Support Desk';
-      case 6:
+      case 5:
         return 'Profile Settings';
       default:
         return 'Customer Dashboard';
@@ -486,7 +573,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       {'title': 'Order Water', 'icon': Icons.local_drink_rounded},
       {'title': 'My Deliveries', 'icon': Icons.local_shipping_rounded},
       {'title': 'Payment History', 'icon': Icons.payment_rounded},
-      {'title': 'Points & Rewards', 'icon': Icons.star_rounded},
       {'title': 'AI Chat Support', 'icon': Icons.chat_rounded},
       {'title': 'Settings', 'icon': Icons.settings_rounded},
     ];
@@ -559,13 +645,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               },
             ),
           ),
-          _SidebarItemTile(
-            icon: Icons.logout_rounded,
-            title: 'Log Out',
-            isSelected: false,
-            textColor: const Color(0xFFEF4444),
-            onTap: _handleLogout,
-          ),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Container(
@@ -601,6 +680,14 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               ),
             ),
           ),
+          _SidebarItemTile(
+            icon: Icons.logout_rounded,
+            title: 'Log Out',
+            isSelected: false,
+            textColor: const Color(0xFFEF4444),
+            onTap: _handleLogout,
+          ),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -617,10 +704,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       case 3:
         return _buildPaymentHistoryTab(isDark);
       case 4:
-        return _buildPointsStoreTab(isDark);
-      case 5:
         return _buildAiSupportTab(isDark);
-      case 6:
+      case 5:
         return _buildSettingsTab(isDark);
       default:
         return _buildOverviewTab(isDark, width);
@@ -643,10 +728,11 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               o.orderStatus != OrderStatus.cancelled,
         )
         .length;
-    final rewardPoints = orderProvider.getCustomerRewardPoints(customerId);
 
     final pendingGcashOrders = myOrders
-        .where((o) => o.paymentStatus == 'Pending' && o.paymentMethod == 'GCash')
+        .where(
+          (o) => o.paymentStatus == 'Pending' && o.paymentMethod == 'GCash',
+        )
         .toList();
 
     return SingleChildScrollView(
@@ -656,11 +742,15 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         children: [
           if (pendingGcashOrders.isNotEmpty) ...[
             InkWell(
-              onTap: () => _showGcashPaymentDialog(pendingGcashOrders.first, isDark),
+              onTap: () =>
+                  _showGcashPaymentDialog(pendingGcashOrders.first, isDark),
               borderRadius: BorderRadius.circular(14),
               child: Container(
                 margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: CustomerDecorations.gcashBanner,
                 child: Row(
                   children: [
@@ -670,7 +760,11 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                         color: Colors.white.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 20),
+                      child: const Icon(
+                        Icons.account_balance_wallet_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -679,24 +773,38 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                         children: [
                           Text(
                             'Unpaid Order ${pendingGcashOrders.first.id}',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
                           ),
                           Text(
                             'Total: ₱${pendingGcashOrders.first.totalAmount.toStringAsFixed(2)} • Tap to open GCash checkout',
-                            style: const TextStyle(color: Colors.white70, fontSize: 11),
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
                           ),
                         ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.bolt_rounded, size: 14, color: Color(0xFF007DFE)),
+                          Icon(
+                            Icons.bolt_rounded,
+                            size: 14,
+                            color: Color(0xFF007DFE),
+                          ),
                           SizedBox(width: 2),
                           Text(
                             'Pay Now',
@@ -714,30 +822,18 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               ),
             ),
           ],
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  'Active Orders',
-                  '$activeOrdersCount',
-                  'Current deliveries',
-                  Icons.local_drink_rounded,
-                  AppTheme.primaryColor,
-                  isDark,
-                ),
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: _buildStatCard(
+                'Active Orders',
+                '$activeOrdersCount',
+                'Current deliveries',
+                Icons.local_drink_rounded,
+                isDark ? const Color(0xFF38BDF8) : AppTheme.primaryColor,
+                isDark,
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildStatCard(
-                  'Reward Points',
-                  '$rewardPoints pts',
-                  'Points available',
-                  Icons.star_rounded,
-                  AppTheme.secondaryColor,
-                  isDark,
-                ),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -810,28 +906,42 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Recent Transactions',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF1E293B),
+                  color: isDark ? Colors.white : const Color(0xFF1E293B),
                 ),
               ),
               TextButton(
                 onPressed: () => setState(() => _selectedTab = 3),
-                child: const Text(
+                child: Text(
                   'View All',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isDark
+                        ? const Color(0xFF38BDF8)
+                        : AppTheme.primaryColor,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
           myOrders.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(24.0),
-                  child: Center(child: Text('No transactions yet.')),
+              ? Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Center(
+                    child: Text(
+                      'No transactions yet.',
+                      style: TextStyle(
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
                 )
               : ListView.builder(
                   shrinkWrap: true,
@@ -843,22 +953,27 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                         tx.orderStatus == OrderStatus.completed ||
                         tx.paymentStatus == 'Paid';
                     final color = isCompleted
-                        ? const Color(0xFF0284C7)
-                        : const Color(0xFFF59E0B);
+                        ? (isDark
+                              ? const Color(0xFF38BDF8)
+                              : const Color(0xFF0284C7))
+                        : (isDark
+                              ? const Color(0xFFFBBF24)
+                              : const Color(0xFFD97706));
 
                     return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      padding: const EdgeInsets.symmetric(vertical: 6.0),
                       child: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: isDark
-                              ? Colors.white.withValues(alpha: 0.02)
+                              ? const Color(0xFF0F172A)
                               : const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: isDark
-                                ? Colors.white10
-                                : const Color(0xFFF1F5F9),
+                                ? const Color(0xFF334155)
+                                : const Color(0xFFE2E8F0),
+                            width: 1.0,
                           ),
                         ),
                         child: Row(
@@ -866,7 +981,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.08),
+                                color: color.withValues(
+                                  alpha: isDark ? 0.2 : 0.08,
+                                ),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
@@ -881,18 +998,24 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    tx.txnId,
-                                    style: const TextStyle(
+                                    tx.txnId.isNotEmpty
+                                        ? tx.txnId
+                                        : 'Order #${tx.id}',
+                                    style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13,
-                                      color: Color(0xFF1E293B),
+                                      color: isDark
+                                          ? Colors.white
+                                          : const Color(0xFF1E293B),
                                     ),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Order ${tx.id} • ${tx.createdAt.toString().split(' ')[0]}',
+                                    'Order #${tx.id} • ${tx.createdAt.toString().split(' ')[0]}',
                                     style: TextStyle(
-                                      color: Colors.grey.shade400,
+                                      color: isDark
+                                          ? const Color(0xFF94A3B8)
+                                          : const Color(0xFF64748B),
                                       fontSize: 11,
                                     ),
                                   ),
@@ -904,30 +1027,36 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                               children: [
                                 Text(
                                   tx.formattedTotal,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 15,
-                                    color: Color(0xFF1E293B),
+                                    color: isDark
+                                        ? const Color(0xFF38BDF8)
+                                        : const Color(0xFF1E293B),
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
+                                    horizontal: 8,
+                                    vertical: 3,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: color.withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(4),
+                                    color: color.withValues(
+                                      alpha: isDark ? 0.22 : 0.08,
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
                                     border: Border.all(
-                                      color: color.withValues(alpha: 0.2),
+                                      color: color.withValues(
+                                        alpha: isDark ? 0.45 : 0.2,
+                                      ),
                                     ),
                                   ),
                                   child: Text(
                                     tx.paymentStatus,
                                     style: TextStyle(
                                       color: color,
-                                      fontSize: 9,
+                                      fontSize: 10,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -979,18 +1108,18 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         color: isDark ? AppTheme.darkSurface : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Quick Actions',
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF1E293B),
+              color: isDark ? Colors.white : const Color(0xFF1E293B),
             ),
           ),
           const SizedBox(height: 14),
@@ -1016,10 +1145,14 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: (act['color'] as Color).withValues(alpha: 0.06),
+                    color: (act['color'] as Color).withValues(
+                      alpha: isDark ? 0.15 : 0.06,
+                    ),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: (act['color'] as Color).withValues(alpha: 0.1),
+                      color: (act['color'] as Color).withValues(
+                        alpha: isDark ? 0.35 : 0.1,
+                      ),
                     ),
                   ),
                   child: Column(
@@ -1031,13 +1164,30 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                         size: 22,
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        act['title'] as String,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF475569),
-                        ),
+                      Builder(
+                        builder: (context) {
+                          final cardBg = isDark
+                              ? AppTheme.darkSurface
+                              : Colors.white;
+                          final tileBg = Color.alphaBlend(
+                            (act['color'] as Color).withValues(
+                              alpha: isDark ? 0.15 : 0.06,
+                            ),
+                            cardBg,
+                          );
+                          final textColor = tileBg.computeLuminance() > 0.5
+                              ? const Color(0xFF0F172A)
+                              : Colors.white;
+                          return Text(
+                            act['title'] as String,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: textColor,
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -1057,26 +1207,26 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         color: isDark ? AppTheme.darkSurface : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(
+            children: [
+              const Icon(
                 Icons.psychology_rounded,
                 color: AppTheme.primaryColor,
                 size: 20,
               ),
-              SizedBox(width: 8),
+              const SizedBox(width: 8),
               Text(
                 'AI Chat Support',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF1E293B),
+                  color: isDark ? Colors.white : const Color(0xFF1E293B),
                 ),
               ),
             ],
@@ -1086,13 +1236,17 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             width: double.infinity,
             padding: const EdgeInsets.all(12.0),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? const Color(0xFF0F172A) : Colors.white,
               borderRadius: const BorderRadius.only(
                 topRight: Radius.circular(12),
                 bottomLeft: Radius.circular(12),
                 bottomRight: Radius.circular(12),
               ),
-              border: Border.all(color: const Color(0xFFE2F0F3)),
+              border: Border.all(
+                color: isDark
+                    ? const Color(0xFF334155)
+                    : const Color(0xFFE2F0F3),
+              ),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1106,8 +1260,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
+                    children: [
+                      const Text(
                         'AquaBot',
                         style: TextStyle(
                           fontSize: 11,
@@ -1115,12 +1269,14 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                           color: AppTheme.primaryColor,
                         ),
                       ),
-                      SizedBox(height: 2),
+                      const SizedBox(height: 2),
                       Text(
                         'Hello! I\'m AquaBot 💧 How can I help you today?',
                         style: TextStyle(
                           fontSize: 11,
-                          color: Color(0xFF475569),
+                          color: isDark
+                              ? const Color(0xFFCBD5E1)
+                              : const Color(0xFF475569),
                           height: 1.3,
                         ),
                       ),
@@ -1138,17 +1294,23 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                   height: 38,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: isDark
+                        ? const Color(0xFF0F172A)
+                        : const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFE2E8F0),
+                    ),
                   ),
                   child: TextField(
                     controller: _chatInputController,
                     onSubmitted: (val) {
                       _sendSupportMessage(val);
                       setState(() {
-                        _selectedTab = 5; // Route to full support tab
-                        _activeSidebarMenu = 5;
+                        _selectedTab = 4; // Route to full support tab
+                        _activeSidebarMenu = 4;
                       });
                     },
                     style: const TextStyle(fontSize: 12),
@@ -1175,8 +1337,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                   onPressed: () {
                     _sendSupportMessage(_chatInputController.text);
                     setState(() {
-                      _selectedTab = 5; // Route to full support tab
-                      _activeSidebarMenu = 5;
+                      _selectedTab = 4; // Route to full support tab
+                      _activeSidebarMenu = 4;
                     });
                   },
                   icon: const Icon(
@@ -1230,18 +1392,17 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   initialValue: _selectedWaterType,
-                  decoration: const InputDecoration(
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                  ),
+                  isExpanded: true,
+                  decoration: _boxedInputDecoration(),
                   items: orderProvider.waterProducts.map((prod) {
                     final name = prod['name'] as String;
                     final price = prod['price'] as double;
                     return DropdownMenuItem<String>(
                       value: name,
-                      child: Text('$name (₱${price.toStringAsFixed(2)})'),
+                      child: Text(
+                        '$name (₱${price.toStringAsFixed(2)})',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     );
                   }).toList(),
                   onChanged: (val) {
@@ -1319,14 +1480,249 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                const Text(
+                  'Province',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedProvince,
+                  isExpanded: true,
+                  decoration: _boxedInputDecoration(hint: 'Select Province'),
+                  items: phProvincesSorted
+                      .map(
+                        (p) => DropdownMenuItem(
+                          value: p.name,
+                          child: Text(p.name, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _onProvinceChanged,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'City / Municipality',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  key: ValueKey('city_${_selectedProvince}_${_cities.length}'),
+                  initialValue: _selectedCityCode,
+                  isExpanded: true,
+                  decoration: _boxedInputDecoration(
+                    hint: _loadingCities
+                        ? 'Loading cities/municipalities...'
+                        : 'Select City / Municipality',
+                  ),
+                  items: _cities
+                      .map(
+                        (c) => DropdownMenuItem(
+                          value: c.code,
+                          child: Text(c.name, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _cities.isEmpty ? null : _onCityChanged,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Barangay',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  key: ValueKey(
+                    'brgy_${_selectedCityCode}_${_barangays.length}',
+                  ),
+                  initialValue: _selectedBarangayCode,
+                  isExpanded: true,
+                  decoration: _boxedInputDecoration(
+                    hint: _loadingBarangays
+                        ? 'Loading barangays...'
+                        : 'Select Barangay',
+                  ),
+                  items: _barangays
+                      .map(
+                        (b) => DropdownMenuItem(
+                          value: b.code,
+                          child: Text(b.name, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _barangays.isEmpty
+                      ? null
+                      : (val) => setState(() => _selectedBarangayCode = val),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'House No. / Street / Purok',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+                const SizedBox(height: 6),
                 TextField(
                   controller: _orderAddressController,
                   maxLines: 2,
-                  decoration: const InputDecoration(
-                    hintText: 'Enter your exact home address...',
+                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  decoration: _boxedInputDecoration(
+                    hint: 'House no., street, purok / landmark',
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Map Pinning Action / Status Box (Shopee-style)
+                InkWell(
+                  onTap: () async {
+                    final result = await LocationPickerModal.show(
+                      context,
+                      initialLocation: _pinnedLocation,
+                    );
+                    if (result != null) {
+                      setState(() => _pinnedLocation = result);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _pinnedLocation != null
+                          ? const Color(0xFFF0FDF4)
+                          : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _pinnedLocation != null
+                            ? const Color(0xFF86EFAC)
+                            : const Color(0xFFCBD5E1),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _pinnedLocation != null
+                                ? const Color(0xFF22C55E).withValues(alpha: 0.15)
+                                : AppTheme.primaryColor.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _pinnedLocation != null
+                                ? Icons.location_on_rounded
+                                : Icons.add_location_alt_rounded,
+                            color: _pinnedLocation != null
+                                ? const Color(0xFF16A34A)
+                                : AppTheme.primaryColor,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _pinnedLocation != null
+                                    ? 'Exact GPS Location Pinned'
+                                    : 'Pin Delivery Location on Map',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: _pinnedLocation != null
+                                      ? const Color(0xFF15803D)
+                                      : const Color(0xFF0F172A),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _pinnedLocation != null
+                                    ? 'Pin: ${_pinnedLocation!.latitude.toStringAsFixed(5)}, ${_pinnedLocation!.longitude.toStringAsFixed(5)}'
+                                    : 'Tap to point your exact house on the map for the rider',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: _pinnedLocation != null
+                                      ? const Color(0xFF166534)
+                                      : const Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            final result = await LocationPickerModal.show(
+                              context,
+                              initialLocation: _pinnedLocation,
+                            );
+                            if (result != null) {
+                              setState(() => _pinnedLocation = result);
+                            }
+                          },
+                          child: Text(
+                            _pinnedLocation != null ? 'Edit Pin' : 'Set Pin',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        if (_pinnedLocation != null)
+                          IconButton(
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              size: 16,
+                              color: Colors.grey,
+                            ),
+                            tooltip: 'Remove Pin',
+                            onPressed: () {
+                              setState(() => _pinnedLocation = null);
+                            },
+                          ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
+
+                // Delivery Note / Preference
+                const Text(
+                  'Delivery Note / Preference (optional)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _deliveryNoteController,
+                  maxLines: 3,
+                  maxLength: 200,
+                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  decoration: _boxedInputDecoration(
+                    hint:
+                        'e.g. Leave at the gate, call upon arrival, deliver after 5 PM...',
+                  ),
+                ),
+                const SizedBox(height: 12),
 
                 // Payment Method
                 const Text(
@@ -1340,20 +1736,22 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   initialValue: _selectedPaymentMethod,
-                  decoration: const InputDecoration(
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                  ),
+                  isExpanded: true,
+                  decoration: _boxedInputDecoration(),
                   items: const [
                     DropdownMenuItem(
                       value: 'Cash on Delivery',
-                      child: Text('Cash on Delivery (COD)'),
+                      child: Text(
+                        'Cash on Delivery (COD)',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     DropdownMenuItem(
                       value: 'GCash',
-                      child: Text('GCash Mobile Payment'),
+                      child: Text(
+                        'GCash Mobile Payment',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                   onChanged: (val) {
@@ -1385,6 +1783,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       ),
     );
   }
+
   // TAB 2: MY DELIVERIES STATUS TRACKER
   Widget _buildDeliveriesTab(bool isDark) {
     final auth = Provider.of<AuthProvider>(context);
@@ -1392,11 +1791,14 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     final user = auth.currentUser;
     final myOrders = orderProvider.getCustomerOrders(user?.id ?? '');
 
-    final activeDelivery = myOrders.any((o) => o.orderStatus == OrderStatus.onDelivery)
+    final activeDelivery =
+        myOrders.any((o) => o.orderStatus == OrderStatus.onDelivery)
         ? myOrders.firstWhere((o) => o.orderStatus == OrderStatus.onDelivery)
         : null;
     final pendingGcashOrders = myOrders
-        .where((o) => o.paymentStatus == 'Pending' && o.paymentMethod == 'GCash')
+        .where(
+          (o) => o.paymentStatus == 'Pending' && o.paymentMethod == 'GCash',
+        )
         .toList();
 
     return Padding(
@@ -1413,19 +1815,32 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               ),
               if (pendingGcashOrders.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF007DFE).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF007DFE).withValues(alpha: 0.3)),
+                    border: Border.all(
+                      color: const Color(0xFF007DFE).withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.account_balance_wallet_rounded, size: 14, color: Color(0xFF007DFE)),
+                      const Icon(
+                        Icons.account_balance_wallet_rounded,
+                        size: 14,
+                        color: Color(0xFF007DFE),
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '${pendingGcashOrders.length} Unpaid GCash',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF007DFE)),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF007DFE),
+                        ),
                       ),
                     ],
                   ),
@@ -1435,7 +1850,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           if (pendingGcashOrders.isNotEmpty) ...[
             const SizedBox(height: 12),
             InkWell(
-              onTap: () => _showGcashPaymentDialog(pendingGcashOrders.first, isDark),
+              onTap: () =>
+                  _showGcashPaymentDialog(pendingGcashOrders.first, isDark),
               borderRadius: BorderRadius.circular(12),
               child: Container(
                 padding: const EdgeInsets.all(12),
@@ -1456,7 +1872,11 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.payment_rounded, color: Colors.white, size: 20),
+                    const Icon(
+                      Icons.payment_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -1464,17 +1884,27 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                         children: [
                           Text(
                             'Action Required: Pay GCash for ${pendingGcashOrders.first.id}',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
                           ),
                           Text(
                             'Amount: ₱${pendingGcashOrders.first.totalAmount.toStringAsFixed(2)} • Tap to complete payment',
-                            style: const TextStyle(color: Colors.white70, fontSize: 11),
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
                           ),
                         ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
@@ -1499,7 +1929,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               height: 220,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+                border: Border.all(
+                  color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+                ),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -1523,10 +1955,25 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                       final order = myOrders[index];
                       final isDone = order.orderStatus == OrderStatus.completed;
 
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: const Color(0xFFCBD5E1),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
                         child: Padding(
-                          padding: const EdgeInsets.all(16.0),
+                          padding: const EdgeInsets.all(18.0),
                           child: Row(
                             children: [
                               Container(
@@ -1560,14 +2007,16 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                     Text(
                                       order.itemsSummary,
                                       style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15,
+                                        color: Color(0xFF0F172A),
                                       ),
                                     ),
                                     Text(
                                       order.deliveryAddress,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade500,
+                                      style: const TextStyle(
+                                        fontSize: 12.5,
+                                        color: Color(0xFF475569),
                                       ),
                                     ),
                                     if (order.driverName != null) ...[
@@ -1601,24 +2050,38 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                     order.createdAt.toString().split(' ')[0],
                                     style: const TextStyle(
                                       fontSize: 12,
-                                      color: Colors.grey,
+                                      color: Color(0xFF475569),
                                     ),
                                   ),
-                                  if (order.paymentStatus == 'Pending' && order.paymentMethod == 'GCash') ...[
+                                  if (order.paymentStatus == 'Pending' &&
+                                      order.paymentMethod == 'GCash') ...[
                                     const SizedBox(height: 6),
                                     InkWell(
-                                      onTap: () => _showGcashPaymentDialog(order, isDark),
+                                      onTap: () => _showGcashPaymentDialog(
+                                        order,
+                                        isDark,
+                                      ),
                                       borderRadius: BorderRadius.circular(8),
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
                                         decoration: BoxDecoration(
                                           gradient: const LinearGradient(
-                                            colors: [Color(0xFF007DFE), Color(0xFF0056B3)],
+                                            colors: [
+                                              Color(0xFF007DFE),
+                                              Color(0xFF0056B3),
+                                            ],
                                           ),
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: const Color(0xFF007DFE).withValues(alpha: 0.3),
+                                              color: const Color(
+                                                0xFF007DFE,
+                                              ).withValues(alpha: 0.3),
                                               blurRadius: 4,
                                               offset: const Offset(0, 2),
                                             ),
@@ -1627,11 +2090,19 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                         child: const Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            Icon(Icons.bolt_rounded, size: 12, color: Colors.white),
+                                            Icon(
+                                              Icons.bolt_rounded,
+                                              size: 12,
+                                              color: Colors.white,
+                                            ),
                                             SizedBox(width: 3),
                                             Text(
                                               '⚡ Pay GCash',
-                                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white),
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w900,
+                                                color: Colors.white,
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -1702,8 +2173,24 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                           ? Colors.green
                           : Colors.amber.shade700;
 
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 10),
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: const Color(0xFFCBD5E1),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
                         child: ListTile(
                           leading: CircleAvatar(
                             backgroundColor: color.withValues(alpha: 0.08),
@@ -1711,10 +2198,19 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                           ),
                           title: Text(
                             tx.txnId,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                              fontSize: 15,
+                            ),
                           ),
                           subtitle: Text(
                             'Order: ${tx.id} • ${tx.paymentMethod}\nDate: ${tx.createdAt.toString().split('.')[0]}',
+                            style: const TextStyle(
+                              color: Color(0xFF475569),
+                              fontSize: 12.5,
+                              height: 1.4,
+                            ),
                           ),
                           isThreeLine: true,
                           trailing: Column(
@@ -1726,29 +2222,46 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w900,
                                   fontSize: 14,
+                                  color: Color(0xFF0F172A),
                                 ),
                               ),
-                              if (tx.paymentStatus == 'Pending' && tx.paymentMethod == 'GCash') ...[
+                              if (tx.paymentStatus == 'Pending' &&
+                                  tx.paymentMethod == 'GCash') ...[
                                 const SizedBox(height: 4),
                                 InkWell(
-                                  onTap: () => _showGcashPaymentDialog(tx, isDark),
+                                  onTap: () =>
+                                      _showGcashPaymentDialog(tx, isDark),
                                   borderRadius: BorderRadius.circular(6),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 3,
+                                    ),
                                     decoration: BoxDecoration(
                                       gradient: const LinearGradient(
-                                        colors: [Color(0xFF007DFE), Color(0xFF0056B3)],
+                                        colors: [
+                                          Color(0xFF007DFE),
+                                          Color(0xFF0056B3),
+                                        ],
                                       ),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.bolt_rounded, size: 10, color: Colors.white),
+                                        Icon(
+                                          Icons.bolt_rounded,
+                                          size: 10,
+                                          color: Colors.white,
+                                        ),
                                         SizedBox(width: 2),
                                         Text(
                                           '⚡ Pay GCash',
-                                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -1787,151 +2300,22 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   }
 
   // TAB 4: POINTS & REWARDS STORE
-  Widget _buildPointsStoreTab(bool isDark) {
-    final auth = Provider.of<AuthProvider>(context);
-    final orderProvider = Provider.of<OrderProvider>(context);
-    final user = auth.currentUser;
-    final rewardPoints = orderProvider.getCustomerRewardPoints(user?.id ?? '');
-
-    final rewardItems = [
-      {
-        'name': 'Free Refill Coupon (19L Purified)',
-        'cost': 100,
-        'desc': 'Get one 19-Liter purified container refilled free.',
-      },
-      {
-        'name': 'Free Refill Coupon (19L Alkaline)',
-        'cost': 120,
-        'desc': 'Get one 19-Liter alkaline container refilled free.',
-      },
-      {
-        'name': '₱50 Store Discount Voucher',
-        'cost': 80,
-        'desc': 'Avail a flat ₱50 discount on your next transaction.',
-      },
-      {
-        'name': 'JJAASS Premium Water Bottle',
-        'cost': 250,
-        'desc': 'Redeem a branded metal water flask at our refilling hub.',
-      },
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20.0),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0284C7), Color(0xFF0284C7)],
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Loyalty Member Balance',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '$rewardPoints Points',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-                const Icon(Icons.stars_rounded, color: Colors.white, size: 40),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Redeem Rewards Catalogue',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: ListView.builder(
-              itemCount: rewardItems.length,
-              itemBuilder: (context, index) {
-                final item = rewardItems[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                item['name'] as String,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                item['desc'] as String,
-                                style: TextStyle(
-                                  color: Colors.grey.shade500,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        ElevatedButton(
-                          onPressed: () => _redeemRewardsCoupon(
-                            item['name'] as String,
-                            item['cost'] as int,
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.secondaryColor,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                          ),
-                          child: Text('${item['cost']} pts'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // TAB 5: AI SUPPORT DESK (Full chat interface)
+  // TAB 4: AI SUPPORT DESK (Full chat interface)
   Widget _buildAiSupportTab(bool isDark) {
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Container(
         decoration: BoxDecoration(
-          color: isDark ? AppTheme.darkSurface : Colors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
-          ),
+          border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: Column(
           children: [
@@ -2008,8 +2392,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                     child: TextField(
                       controller: _chatInputController,
                       onSubmitted: _sendSupportMessage,
-                      decoration: const InputDecoration(
-                        hintText: 'Type your message...',
+                      style: const TextStyle(color: Color(0xFF0F172A)),
+                      decoration: _boxedInputDecoration(
+                        hint: 'Type your message...',
                       ),
                     ),
                   ),
@@ -2059,12 +2444,14 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               children: [
                 TextField(
                   controller: _profileNameController,
-                  decoration: const InputDecoration(labelText: 'Name'),
+                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  decoration: _boxedInputDecoration(label: 'Name'),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _profilePhoneController,
-                  decoration: const InputDecoration(labelText: 'Phone Number'),
+                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  decoration: _boxedInputDecoration(label: 'Phone Number'),
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(

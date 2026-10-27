@@ -23,10 +23,8 @@ class DriverDashboard extends StatefulWidget {
 class _DriverDashboardState extends State<DriverDashboard> {
   final ApiService _apiService = ApiService();
   bool _isLoading = true;
-  bool _isOnline = true;
   int _selectedTab = 0;
   int _activeSidebarMenu = 0;
-  double _driverRating = 4.85;
 
   // AI Chat States
   final List<Map<String, dynamic>> _supportMessages = [
@@ -65,10 +63,9 @@ class _DriverDashboardState extends State<DriverDashboard> {
     });
 
     try {
-      final data = await _apiService.getDriverDashboardData();
+      await _apiService.getDriverDashboardData();
       if (mounted) {
         setState(() {
-          _driverRating = (data['rating'] as double?) ?? _driverRating;
           _isLoading = false;
         });
       }
@@ -140,29 +137,6 @@ class _DriverDashboardState extends State<DriverDashboard> {
         'Delivery completed successfully! +₱${payoutVal.toStringAsFixed(2)} earnings added.',
       );
     }
-  }
-
-  void _cashOutEarnings() {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    final user = auth.currentUser;
-    final driverId = user?.id ?? '';
-    final earnings = orderProvider.getDriverEarnings(driverId);
-
-    if (earnings <= 0) {
-      Helpers.showSnackBar(
-        context,
-        'No earnings balance to cash out.',
-        isError: true,
-      );
-      return;
-    }
-
-    orderProvider.cashOutDriverEarnings(driverId);
-    Helpers.showSnackBar(
-      context,
-      'Successfully cashed out ₱${earnings.toStringAsFixed(2)} to your GCash account!',
-    );
   }
 
   void _sendSupportMessage(String text) async {
@@ -439,10 +413,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
       case 2:
         return 'Trip Duty History';
       case 3:
-        return 'Driver Earnings Portal';
-      case 4:
         return 'AI Support Dispatch';
-      case 5:
+      case 4:
         return 'Vehicle & Profile Settings';
       default:
         return 'Driver Dashboard';
@@ -454,7 +426,6 @@ class _DriverDashboardState extends State<DriverDashboard> {
       {'title': 'Dashboard', 'icon': Icons.home_rounded},
       {'title': 'Deliveries Map', 'icon': Icons.map_rounded},
       {'title': 'Duty History', 'icon': Icons.history_rounded},
-      {'title': 'My Earnings', 'icon': Icons.payments_rounded},
       {'title': 'AI Chat Support', 'icon': Icons.chat_rounded},
       {'title': 'Settings', 'icon': Icons.settings_rounded},
     ];
@@ -527,13 +498,6 @@ class _DriverDashboardState extends State<DriverDashboard> {
               },
             ),
           ),
-          _SidebarItemTile(
-            icon: Icons.logout_rounded,
-            title: 'Log Out',
-            isSelected: false,
-            textColor: const Color(0xFFEF4444),
-            onTap: _handleLogout,
-          ),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Container(
@@ -569,6 +533,14 @@ class _DriverDashboardState extends State<DriverDashboard> {
               ),
             ),
           ),
+          _SidebarItemTile(
+            icon: Icons.logout_rounded,
+            title: 'Log Out',
+            isSelected: false,
+            textColor: const Color(0xFFEF4444),
+            onTap: _handleLogout,
+          ),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -583,10 +555,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
       case 2:
         return _buildDutyHistoryTab(isDark);
       case 3:
-        return _buildEarningsTab(isDark);
-      case 4:
         return _buildSupportTab(isDark);
-      case 5:
+      case 4:
         return _buildSettingsTab(isDark);
       default:
         return _buildOverviewTab(isDark, width);
@@ -607,70 +577,6 @@ class _DriverDashboardState extends State<DriverDashboard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Duty Switch Header Banner
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: DriverDecorations.dutyBanner(_isOnline),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 26,
-                  backgroundColor: Colors.white.withValues(alpha: 0.18),
-                  child: const Icon(
-                    Icons.drive_eta_rounded,
-                    size: 28,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Delivery Duty Status',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _isOnline
-                            ? 'Online - Receiving delivery jobs'
-                            : 'Offline - Resting',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.85),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Switch(
-                  value: _isOnline,
-                  activeThumbColor: Colors.white,
-                  activeTrackColor: const Color(0xFF10B981),
-                  inactiveThumbColor: Colors.white70,
-                  inactiveTrackColor: Colors.black26,
-                  onChanged: (value) {
-                    setState(() {
-                      _isOnline = value;
-                    });
-                    Helpers.showSnackBar(
-                      context,
-                      _isOnline
-                          ? 'You are now Online and ready!'
-                          : 'You are now Offline.',
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
           // Stat Cards
           Row(
             children: [
@@ -681,17 +587,6 @@ class _DriverDashboardState extends State<DriverDashboard> {
                   'Earning details',
                   Icons.payments_rounded,
                   const Color(0xFF10B981),
-                  isDark,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildStatCard(
-                  'Driver Rating',
-                  '${_driverRating.toStringAsFixed(2)} ★',
-                  'Customer rating',
-                  Icons.star_rounded,
-                  const Color(0xFFF59E0B),
                   isDark,
                 ),
               ),
@@ -777,30 +672,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
             ),
           ),
           const SizedBox(height: 16),
-          if (!_isOnline)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.02)
-                    : const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
-                ),
-              ),
-              child: const Center(
-                child: Text(
-                  'Go Online to view job invitations.',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-              ),
-            )
-          else if (availableJobs.isEmpty && activeJob == null)
+          if (availableJobs.isEmpty && activeJob == null)
             const Padding(
               padding: EdgeInsets.all(24.0),
               child: Center(child: Text('No job invitations at the moment.')),
@@ -996,22 +868,16 @@ class _DriverDashboardState extends State<DriverDashboard> {
         'tab': 1,
       },
       {
-        'title': 'Earnings Log',
-        'icon': Icons.list_alt_rounded,
-        'color': const Color(0xFF0284C7),
-        'tab': 3,
-      },
-      {
         'title': 'Driver Support',
         'icon': Icons.support_agent_rounded,
         'color': const Color(0xFF0EA5E9),
-        'tab': 4,
+        'tab': 3,
       },
       {
         'title': 'Settings',
         'icon': Icons.settings_rounded,
         'color': const Color(0xFF10B981),
-        'tab': 5,
+        'tab': 4,
       },
     ];
 
@@ -1189,8 +1055,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     onSubmitted: (val) {
                       _sendSupportMessage(val);
                       setState(() {
-                        _selectedTab = 4; // Route to support tab
-                        _activeSidebarMenu = 4;
+                        _selectedTab = 3; // Route to support tab
+                        _activeSidebarMenu = 3;
                       });
                     },
                     style: const TextStyle(fontSize: 12),
@@ -1217,8 +1083,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
                   onPressed: () {
                     _sendSupportMessage(_supportInputController.text);
                     setState(() {
-                      _selectedTab = 4;
-                      _activeSidebarMenu = 4;
+                      _selectedTab = 3;
+                      _activeSidebarMenu = 3;
                     });
                   },
                   icon: const Icon(
@@ -1317,6 +1183,26 @@ class _DriverDashboardState extends State<DriverDashboard> {
                             color: AppTheme.primaryColor,
                           ),
                         ),
+                        if (activeJob.deliveryNote != null)
+                          Container(
+                            margin: const EdgeInsets.only(top: 6),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: const Color(0xFFF59E0B),
+                              ),
+                            ),
+                            child: Text(
+                              '📝 Customer Note: ${activeJob.deliveryNote}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF78350F),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -1324,8 +1210,17 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     children: [
                       ElevatedButton.icon(
                         onPressed: () async {
-                          final query = Uri.encodeComponent(activeJob.deliveryAddress);
-                          final url = 'https://www.google.com/maps/search/?api=1&query=$query';
+                          final String url;
+                          if (activeJob.latitude != null &&
+                              activeJob.longitude != null) {
+                            url =
+                                'https://www.google.com/maps/dir/?api=1&destination=${activeJob.latitude},${activeJob.longitude}';
+                          } else {
+                            final query =
+                                Uri.encodeComponent(activeJob.deliveryAddress);
+                            url =
+                                'https://www.google.com/maps/search/?api=1&query=$query';
+                          }
                           final uri = Uri.parse(url);
                           final canLaunch = await canLaunchUrl(uri);
                           if (!mounted) return;
@@ -1464,138 +1359,6 @@ class _DriverDashboardState extends State<DriverDashboard> {
     );
   }
 
-  // TAB 3: MY EARNINGS PORTAL
-  Widget _buildEarningsTab(bool isDark) {
-    final auth = Provider.of<AuthProvider>(context);
-    final orderProvider = Provider.of<OrderProvider>(context);
-    final user = auth.currentUser;
-    final driverId = user?.id ?? '';
-    final earnings = orderProvider.getDriverEarnings(driverId);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24.0),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0284C7), Color(0xFF0284C7)],
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Withdrawable Cash Balance',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '₱${earnings.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-                ElevatedButton(
-                  onPressed: _cashOutEarnings,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: AppTheme.primaryColor,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                  ),
-                  child: const Text(
-                    'Cash Out (GCash)',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Earnings Growth Metric',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                children: [
-                  const Text(
-                    'Weekly trip earnings chart',
-                    style: TextStyle(color: Colors.grey, fontSize: 11),
-                  ),
-                  const SizedBox(height: 20),
-                  _buildEarningMetricRow('Monday', 0.65, '₱450.00'),
-                  _buildEarningMetricRow('Tuesday', 0.32, '₱220.00'),
-                  _buildEarningMetricRow('Wednesday', 0.85, '₱590.00'),
-                  _buildEarningMetricRow(
-                    'Thursday (Today)',
-                    0.50,
-                    '₱${earnings.toStringAsFixed(0)}',
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEarningMetricRow(String day, double pct, String val) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              day,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-            ),
-          ),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: pct,
-                minHeight: 12,
-                backgroundColor: Colors.grey.shade100,
-                valueColor: const AlwaysStoppedAnimation<Color>(
-                  AppTheme.primaryColor,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            val,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
   // TAB 4: AI SUPPORT DESK (Full chat interface)
   Widget _buildSupportTab(bool isDark) {
     return Padding(
@@ -1710,6 +1473,22 @@ class _DriverDashboardState extends State<DriverDashboard> {
   }
 
   // TAB 5: SETTINGS
+  InputDecoration _boxedDecoration(String label) {
+    OutlineInputBorder border(Color color, [double width = 1.2]) =>
+        OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: color, width: width),
+        );
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: Color(0xFF475569)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: border(const Color(0xFFCBD5E1)),
+      enabledBorder: border(const Color(0xFFCBD5E1)),
+      focusedBorder: border(AppTheme.primaryColor, 2),
+    );
+  }
+
   Widget _buildSettingsTab(bool isDark) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24.0),
@@ -1724,32 +1503,38 @@ class _DriverDashboardState extends State<DriverDashboard> {
           Container(
             padding: const EdgeInsets.all(20.0),
             decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkSurface : Colors.white,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
-              ),
+              border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 DropdownButtonFormField<String>(
                   initialValue: _selectedVehicleType,
-                  decoration: const InputDecoration(
-                    labelText: 'Registered Vehicle Type',
-                  ),
+                  isExpanded: true,
+                  decoration: _boxedDecoration('Registered Vehicle Type'),
                   items: const [
                     DropdownMenuItem(
                       value: 'Motorcycle with Rack',
-                      child: Text('Motorcycle with Rack'),
+                      child: Text(
+                        'Motorcycle with Rack',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     DropdownMenuItem(
                       value: 'Sidecar / Tricycle',
-                      child: Text('Sidecar / Tricycle'),
+                      child: Text(
+                        'Sidecar / Tricycle',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     DropdownMenuItem(
                       value: 'Delivery Truck',
-                      child: Text('Delivery Truck'),
+                      child: Text(
+                        'Delivery Truck',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                   onChanged: (val) {
@@ -1761,7 +1546,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: _plateNoController,
-                  decoration: const InputDecoration(labelText: 'Plate Number'),
+                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  decoration: _boxedDecoration('Plate Number'),
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(

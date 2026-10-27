@@ -12,29 +12,152 @@ class OrderProvider extends ChangeNotifier {
   bool _isLoading = false;
   Timer? _pollingTimer;
 
-  // Shared dynamic water products catalog
-  final List<Map<String, dynamic>> _waterProducts = [
+  // Shared dynamic inventory items catalog (Water Refills, Containers & Bottles, Accessories)
+  final List<Map<String, dynamic>> _inventoryItems = [
     {
       'id': 'prod_purified',
       'name': '19L Purified Water',
+      'category': 'water',
+      'unit': 'Gallons',
       'price': 50.0,
       'stock': 127.0,
       'capacity': 150.0,
       'color': Colors.blue,
       'icon': Icons.water_drop_rounded,
+      'description': 'Multi-stage filtered pure drinking water refill',
     },
     {
       'id': 'prod_alkaline',
       'name': '19L Alkaline Water',
+      'category': 'water',
+      'unit': 'Gallons',
       'price': 60.0,
       'stock': 70.0,
       'capacity': 100.0,
       'color': Colors.cyan,
       'icon': Icons.opacity_rounded,
+      'description': 'pH 8.5+ mineral-rich ionized alkaline water',
+    },
+    {
+      'id': 'prod_mineral',
+      'name': '19L Natural Mineral Water',
+      'category': 'water',
+      'unit': 'Gallons',
+      'price': 55.0,
+      'stock': 85.0,
+      'capacity': 120.0,
+      'color': Colors.teal,
+      'icon': Icons.science_rounded,
+      'description': 'Enriched with natural essential minerals & electrolytes',
+    },
+    {
+      'id': 'item_slim_gallon',
+      'name': '5-Gallon Slim Container',
+      'category': 'container',
+      'unit': 'Units',
+      'price': 220.0,
+      'stock': 45.0,
+      'capacity': 100.0,
+      'color': Colors.indigo,
+      'icon': Icons.local_drink_rounded,
+      'image': 'assets/images/slim_container.jpg',
+      'description': 'BPA-free durable slim poly-carbonate gallon jug',
+    },
+    {
+      'id': 'item_round_gallon',
+      'name': '5-Gallon Round Container',
+      'category': 'container',
+      'unit': 'Units',
+      'price': 200.0,
+      'stock': 38.0,
+      'capacity': 100.0,
+      'color': Colors.deepPurple,
+      'icon': Icons.crop_portrait_rounded,
+      'image': 'assets/images/round_container.jpg',
+      'description': 'Heavy-duty standard round water bottle',
+    },
+    {
+      'id': 'item_electric_pump',
+      'name': 'Rechargeable Electric Water Pump',
+      'category': 'accessory',
+      'unit': 'Pieces',
+      'price': 350.0,
+      'stock': 18.0,
+      'capacity': 50.0,
+      'color': Colors.amber,
+      'icon': Icons.power_rounded,
+      'description': 'USB rechargeable automatic dispenser pump',
+    },
+    {
+      'id': 'item_manual_pump',
+      'name': 'Manual Hand Press Water Pump',
+      'category': 'accessory',
+      'unit': 'Pieces',
+      'price': 120.0,
+      'stock': 25.0,
+      'capacity': 60.0,
+      'color': Colors.orange,
+      'icon': Icons.touch_app_rounded,
+      'description': 'Instant vacuum suction manual hand pump',
+    },
+    {
+      'id': 'item_dispenser_caps',
+      'name': '5-Gallon Non-Spill Caps (5-pack)',
+      'category': 'accessory',
+      'unit': 'Packs',
+      'price': 60.0,
+      'stock': 60.0,
+      'capacity': 150.0,
+      'color': Colors.green,
+      'icon': Icons.adjust_rounded,
+      'description': 'Leak-proof anti-splash silicone replacement caps',
     },
   ];
 
-  List<Map<String, dynamic>> get waterProducts => _waterProducts;
+  int _emptyContainerStocks = 140;
+  int _refilledContainerStocks = 90;
+
+  int get emptyContainerStocks => _emptyContainerStocks;
+  int get refilledContainerStocks => _refilledContainerStocks;
+
+  void adjustContainerReserves({int emptyChange = 0, int refilledChange = 0}) {
+    _emptyContainerStocks = max(0, _emptyContainerStocks + emptyChange);
+    _refilledContainerStocks = max(0, _refilledContainerStocks + refilledChange);
+    notifyListeners();
+  }
+
+  List<Map<String, dynamic>> get inventoryItems => _inventoryItems;
+
+  List<Map<String, dynamic>> get waterProducts =>
+      _inventoryItems.where((i) => i['category'] == 'water').toList();
+
+  void addInventoryItem({
+    required String name,
+    required String category,
+    required String unit,
+    required double price,
+    required double stock,
+    required double capacity,
+    required Color color,
+    required IconData icon,
+    String description = '',
+  }) {
+    final newItem = {
+      'id': 'item_${DateTime.now().millisecondsSinceEpoch}',
+      'name': name,
+      'category': category,
+      'unit': unit,
+      'price': price,
+      'stock': stock,
+      'capacity': capacity,
+      'color': color,
+      'icon': icon,
+      'description': description,
+    };
+    _inventoryItems.add(newItem);
+    notifyListeners();
+    _syncInventoryToSupabase(newItem, action: 'insert');
+  }
 
   void addWaterProduct({
     required String name,
@@ -43,35 +166,115 @@ class OrderProvider extends ChangeNotifier {
     required double capacity,
     required Color color,
     required IconData icon,
+    String description = '',
   }) {
-    _waterProducts.add({
-      'id': 'prod_${DateTime.now().millisecondsSinceEpoch}',
-      'name': name,
-      'price': price,
-      'stock': stock,
-      'capacity': capacity,
-      'color': color,
-      'icon': icon,
-    });
-    notifyListeners();
+    addInventoryItem(
+      name: name,
+      category: 'water',
+      unit: 'Gallons',
+      price: price,
+      stock: stock,
+      capacity: capacity,
+      color: color,
+      icon: icon,
+      description: description.isNotEmpty ? description : 'Water Refill Product',
+    );
   }
 
-  void refillWaterProduct(String id, double amount) {
-    final idx = _waterProducts.indexWhere((p) => p['id'] == id);
+  void updateInventoryItem({
+    required String id,
+    required String name,
+    required String category,
+    required String unit,
+    required double price,
+    required double stock,
+    required double capacity,
+    required Color color,
+    required IconData icon,
+    String description = '',
+  }) {
+    final idx = _inventoryItems.indexWhere((p) => p['id'] == id);
     if (idx != -1) {
-      final capacity = _waterProducts[idx]['capacity'] as double;
-      final currentStock = _waterProducts[idx]['stock'] as double;
-      _waterProducts[idx]['stock'] = min(capacity, currentStock + amount);
+      _inventoryItems[idx] = {
+        'id': id,
+        'name': name,
+        'category': category,
+        'unit': unit,
+        'price': price,
+        'stock': stock,
+        'capacity': capacity,
+        'color': color,
+        'icon': icon,
+        'description': description,
+      };
       notifyListeners();
+      _syncInventoryToSupabase(_inventoryItems[idx], action: 'update');
     }
   }
 
-  void deductProductStock(String name, int qty) {
-    final idx = _waterProducts.indexWhere((p) => p['name'] == name);
+  void deleteInventoryItem(String id) {
+    _inventoryItems.removeWhere((p) => p['id'] == id);
+    notifyListeners();
+    _syncInventoryToSupabase({'id': id}, action: 'delete');
+  }
+
+  void restockInventoryItem(String id, double amount) {
+    final idx = _inventoryItems.indexWhere((p) => p['id'] == id);
     if (idx != -1) {
-      final currentStock = _waterProducts[idx]['stock'] as double;
-      _waterProducts[idx]['stock'] = max(0.0, currentStock - qty);
+      final capacity = (_inventoryItems[idx]['capacity'] as num).toDouble();
+      final currentStock = (_inventoryItems[idx]['stock'] as num).toDouble();
+      _inventoryItems[idx]['stock'] = min(capacity, currentStock + amount);
       notifyListeners();
+      _syncInventoryToSupabase(_inventoryItems[idx], action: 'update');
+    }
+  }
+
+  void refillWaterProduct(String id, double amount) {
+    restockInventoryItem(id, amount);
+  }
+
+  void deductProductStock(String name, int qty) {
+    final idx = _inventoryItems.indexWhere((p) => p['name'] == name);
+    if (idx != -1) {
+      final currentStock = (_inventoryItems[idx]['stock'] as num).toDouble();
+      _inventoryItems[idx]['stock'] = max(0.0, currentStock - qty);
+      notifyListeners();
+      _syncInventoryToSupabase(_inventoryItems[idx], action: 'update');
+    }
+    // Also update container reserves
+    adjustContainerReserves(emptyChange: qty, refilledChange: -qty);
+  }
+
+  Future<void> _syncInventoryToSupabase(Map<String, dynamic> item, {required String action}) async {
+    if (!_isSupabaseConfigured) return;
+    try {
+      final client = Supabase.instance.client;
+      if (action == 'insert') {
+        await client.from('inventory').insert({
+          'id': item['id'],
+          'name': item['name'],
+          'category': item['category'],
+          'unit': item['unit'],
+          'price': item['price'],
+          'stock': item['stock'],
+          'capacity': item['capacity'],
+          'description': item['description'] ?? '',
+        });
+      } else if (action == 'update') {
+        await client.from('inventory').update({
+          'name': item['name'],
+          'category': item['category'],
+          'unit': item['unit'],
+          'price': item['price'],
+          'stock': item['stock'],
+          'capacity': item['capacity'],
+          'description': item['description'] ?? '',
+        }).eq('id', item['id']);
+      } else if (action == 'delete') {
+        await client.from('inventory').delete().eq('id', item['id']);
+      }
+    } catch (e) {
+      debugPrint('Supabase inventory sync: $e');
     }
   }
 
@@ -112,10 +315,26 @@ class OrderProvider extends ChangeNotifier {
       // Sort newest first
       fetched.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-      if (fetched.isNotEmpty || _orders.isEmpty) {
+      if (fetched.isNotEmpty) {
+        // Detect if there are changes compared to current in-memory orders
+        bool hasChanges = _orders.length != fetched.length;
+        if (!hasChanges) {
+          for (int i = 0; i < fetched.length; i++) {
+            if (_orders[i].id != fetched[i].id ||
+                _orders[i].orderStatus != fetched[i].orderStatus ||
+                _orders[i].paymentStatus != fetched[i].paymentStatus ||
+                _orders[i].driverId != fetched[i].driverId) {
+              hasChanges = true;
+              break;
+            }
+          }
+        }
+
         _orders.clear();
         _orders.addAll(fetched);
-        if (!silent) notifyListeners();
+        if (hasChanges || !silent) {
+          notifyListeners();
+        }
       }
     } catch (e) {
       debugPrint('Supabase direct fetch orders error: $e');
@@ -170,6 +389,9 @@ class OrderProvider extends ChangeNotifier {
     required double pricePerUnit,
     required String paymentMethod,
     String? paymentStatus,
+    String? deliveryNote,
+    double? latitude,
+    double? longitude,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -195,6 +417,11 @@ class OrderProvider extends ChangeNotifier {
       orderStatus: OrderStatus.pending,
       createdAt: DateTime.now(),
       distance: '${(1.0 + Random().nextDouble() * 3.0).toStringAsFixed(1)} km',
+      deliveryNote: (deliveryNote != null && deliveryNote.trim().isNotEmpty)
+          ? deliveryNote.trim()
+          : null,
+      latitude: latitude,
+      longitude: longitude,
     );
 
     _orders.insert(0, newOrder);
@@ -222,12 +449,37 @@ class OrderProvider extends ChangeNotifier {
           'createdAt': newOrder.createdAt.toIso8601String(),
           'distance': newOrder.distance,
         };
+        if (newOrder.deliveryNote != null) {
+          insertMap['deliveryNote'] = newOrder.deliveryNote!;
+        }
+        if (newOrder.latitude != null) {
+          insertMap['latitude'] = newOrder.latitude!;
+        }
+        if (newOrder.longitude != null) {
+          insertMap['longitude'] = newOrder.longitude!;
+        }
 
-        await client.from('orders').insert(insertMap);
-        debugPrint('Successfully inserted order ${newOrder.id} to Supabase!');
+        try {
+          await client.from('orders').insert(insertMap);
+          debugPrint('Successfully inserted order ${newOrder.id} to Supabase!');
+        } catch (colErr) {
+          debugPrint('Supabase initial insert failed: $colErr. Retrying with safe base columns...');
+          // Remove deliveryNote if column does not exist in the database table
+          insertMap.remove('deliveryNote');
+          if (newOrder.deliveryNote != null && newOrder.deliveryNote!.isNotEmpty) {
+            insertMap['deliveryAddress'] =
+                '${newOrder.deliveryAddress} (Note: ${newOrder.deliveryNote})';
+          }
+          try {
+            await client.from('orders').insert(insertMap);
+            debugPrint('Successfully inserted order ${newOrder.id} with safe columns!');
+          } catch (retryErr) {
+            debugPrint('Supabase retry insert failed: $retryErr');
+          }
+        }
         
-        // Refresh immediately
-        await fetchSupabaseOrders(silent: true);
+        // Refresh immediately with notify
+        await fetchSupabaseOrders(silent: false);
       } catch (e) {
         debugPrint('Supabase insert failed: $e');
       }
@@ -359,9 +611,10 @@ class OrderProvider extends ChangeNotifier {
 
   Future<void> markOrderAsPaid(String orderId) async {
     final index = _orders.indexWhere((o) => o.id == orderId);
-    if (index == -1) return;
-
-    _orders[index].paymentStatus = 'Paid';
+    if (index != -1) {
+      _orders[index].paymentStatus = 'Paid';
+      notifyListeners();
+    }
 
     if (_isSupabaseConfigured) {
       try {
@@ -370,7 +623,7 @@ class OrderProvider extends ChangeNotifier {
             .from('orders')
             .update({'paymentStatus': 'Paid'})
             .eq('id', orderId);
-        await fetchSupabaseOrders(silent: true);
+        await fetchSupabaseOrders(silent: false);
       } catch (e) {
         debugPrint('Supabase mark order paid error: $e');
       }

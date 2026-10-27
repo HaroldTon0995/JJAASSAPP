@@ -64,6 +64,7 @@ class OrderModel {
   final String distance;
   final double? latitude;
   final double? longitude;
+  final String? deliveryNote; // Customer's delivery preference / note
 
   OrderModel({
     required this.id,
@@ -86,6 +87,7 @@ class OrderModel {
     this.distance = '1.5 km',
     this.latitude,
     this.longitude,
+    this.deliveryNote,
   });
 
   String get formattedTotal => '₱${totalAmount.toStringAsFixed(2)}';
@@ -120,6 +122,7 @@ class OrderModel {
       'distance': distance,
       'latitude': latitude,
       'longitude': longitude,
+      'deliveryNote': deliveryNote,
     };
   }
 
@@ -151,6 +154,7 @@ class OrderModel {
       longitude: json['longitude'] != null
           ? (json['longitude'] as num).toDouble()
           : null,
+      deliveryNote: json['deliveryNote'] as String?,
     );
   }
 }

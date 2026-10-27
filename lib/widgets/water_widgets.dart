@@ -1,5 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../core/theme/app_theme.dart';
+import '../models/order_model.dart';
+import '../models/user_model.dart';
 
 /// Renders the JJAASS Water Market logo emblem.
 class WaterDropletLogo extends StatelessWidget {
@@ -367,24 +370,76 @@ class WaveBackgroundPainter extends CustomPainter {
 }
 
 /// Renders a beautiful curve/line chart matching the screenshot.
-class SalesOverviewLineChart extends StatelessWidget {
+/// Renders an interactive, auto-scaling curve/line chart matching live transactions.
+class SalesOverviewLineChart extends StatefulWidget {
   final List<double> dataPoints;
+  final List<String> labels;
+  final int? selectedIndex;
+  final ValueChanged<int>? onPointSelected;
+  final bool isDark;
+
   const SalesOverviewLineChart({
     super.key,
     required this.dataPoints,
+    this.labels = const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    this.selectedIndex,
+    this.onPointSelected,
+    this.isDark = false,
   });
 
   @override
+  State<SalesOverviewLineChart> createState() => _SalesOverviewLineChartState();
+}
+
+class _SalesOverviewLineChartState extends State<SalesOverviewLineChart> {
+  int? _hoveredIndex;
+
+  @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _SalesOverviewPainter(dataPoints),
+    final activeIndex = _hoveredIndex ?? widget.selectedIndex;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return GestureDetector(
+          onTapDown: (details) {
+            if (widget.dataPoints.isEmpty) return;
+            final double width = constraints.maxWidth;
+            final double stepX = widget.dataPoints.length > 1
+                ? width / (widget.dataPoints.length - 1)
+                : width;
+            final int tappedIndex = (details.localPosition.dx / stepX).round().clamp(0, widget.dataPoints.length - 1);
+            setState(() {
+              _hoveredIndex = tappedIndex;
+            });
+            widget.onPointSelected?.call(tappedIndex);
+          },
+          child: CustomPaint(
+            size: Size(constraints.maxWidth, constraints.maxHeight),
+            painter: _SalesOverviewPainter(
+              data: widget.dataPoints,
+              labels: widget.labels,
+              selectedIndex: activeIndex,
+              isDark: widget.isDark,
+            ),
+          ),
+        );
+      },
     );
   }
 }
 
 class _SalesOverviewPainter extends CustomPainter {
   final List<double> data;
-  _SalesOverviewPainter(this.data);
+  final List<String> labels;
+  final int? selectedIndex;
+  final bool isDark;
+
+  _SalesOverviewPainter({
+    required this.data,
+    required this.labels,
+    this.selectedIndex,
+    this.isDark = false,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -395,25 +450,34 @@ class _SalesOverviewPainter extends CustomPainter {
 
     // Draw background grid lines (horizontal)
     final gridPaint = Paint()
-      ..color = Colors.grey.withValues(alpha: 0.08)
+      ..color = (isDark ? Colors.white : Colors.grey).withValues(alpha: 0.08)
       ..strokeWidth = 1;
 
-    for (int i = 0; i <= 5; i++) {
-      final y = gridHeight * (i / 5);
+    for (int i = 0; i <= 4; i++) {
+      final y = gridHeight * (i / 4);
       canvas.drawLine(Offset(0, y), Offset(gridWidth, y), gridPaint);
     }
 
-    final double minVal = data.reduce(min);
-    final double maxVal = data.reduce(max);
-    final double valRange = maxVal - minVal == 0 ? 1 : maxVal - minVal;
+    double minVal = data.reduce(min);
+    double maxVal = data.reduce(max);
+    if (maxVal == minVal) {
+      if (maxVal == 0) {
+        maxVal = 1000;
+        minVal = 0;
+      } else {
+        maxVal = maxVal * 1.25;
+        minVal = minVal * 0.75;
+      }
+    }
+    final double valRange = maxVal - minVal;
 
-    final double stepX = gridWidth / (data.length - 1);
+    final double stepX = data.length > 1 ? gridWidth / (data.length - 1) : gridWidth;
 
     double getX(int index) => index * stepX;
     double getY(double val) {
       final double normalized = (val - minVal) / valRange;
-      // Leave padding top and bottom
-      return gridHeight - (normalized * gridHeight * 0.65) - (gridHeight * 0.15);
+      // Keep within comfortable padding bounds
+      return gridHeight - (normalized * gridHeight * 0.60) - (gridHeight * 0.15);
     }
 
     final path = Path();
@@ -429,7 +493,7 @@ class _SalesOverviewPainter extends CustomPainter {
       final double currX = getX(i);
       final double currY = getY(data[i]);
 
-      // Cubic bezier control points
+      // Smooth cubic bezier control points
       final double cpX1 = prevX + (currX - prevX) / 2;
       final double cpY1 = prevY;
       final double cpX2 = prevX + (currX - prevX) / 2;
@@ -442,11 +506,11 @@ class _SalesOverviewPainter extends CustomPainter {
     fillPath.lineTo(getX(data.length - 1), gridHeight);
     fillPath.close();
 
-    // Fill paint with cyan gradient
+    // Fill paint with cyan/blue gradient
     final fillPaint = Paint()
       ..shader = LinearGradient(
         colors: [
-          const Color(0xFF0284C7).withValues(alpha: 0.2),
+          const Color(0xFF0284C7).withValues(alpha: 0.22),
           const Color(0xFF0284C7).withValues(alpha: 0.0),
         ],
         begin: Alignment.topCenter,
@@ -474,62 +538,85 @@ class _SalesOverviewPainter extends CustomPainter {
       ..color = const Color(0xFF0284C7).withValues(alpha: 0.25)
       ..style = PaintingStyle.fill;
 
+    // Determine which point to highlight (default to peak index or last non-zero)
+    int highlightIdx = selectedIndex ?? 0;
+    if (selectedIndex == null) {
+      double highest = -1;
+      for (int i = 0; i < data.length; i++) {
+        if (data[i] >= highest) {
+          highest = data[i];
+          highlightIdx = i;
+        }
+      }
+    }
+
     for (int i = 0; i < data.length; i++) {
       final Offset pt = Offset(getX(i), getY(data[i]));
-      canvas.drawCircle(pt, 7, dotOuterPaint);
-      canvas.drawCircle(pt, 4, dotPaint);
+      canvas.drawCircle(pt, 6, dotOuterPaint);
+      canvas.drawCircle(pt, 3.5, dotPaint);
 
-      // Friday index is i = 4 (Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6)
-      if (i == 4) {
-        // Highlight Friday with larger outline
-        canvas.drawCircle(pt, 11, Paint()
-          ..color = const Color(0xFF0284C7).withValues(alpha: 0.12)
-          ..style = PaintingStyle.fill);
+      if (i == highlightIdx) {
+        // Highlight active point
+        canvas.drawCircle(
+          pt,
+          11,
+          Paint()
+            ..color = const Color(0xFF0284C7).withValues(alpha: 0.2)
+            ..style = PaintingStyle.fill,
+        );
 
-        // Draw Friday ₱12,450 box popup above the point
-        final boxRect = Rect.fromLTWH(pt.dx - 45, pt.dy - 55, 90, 36);
+        // Draw Dynamic Tooltip Box above the point
+        final double boxWidth = 92;
+        final double boxHeight = 38;
+        double boxLeft = (pt.dx - boxWidth / 2).clamp(4.0, gridWidth - boxWidth - 4.0);
+        double boxTop = pt.dy - boxHeight - 12;
+        if (boxTop < 2) boxTop = pt.dy + 12;
+
+        final boxRect = Rect.fromLTWH(boxLeft, boxTop, boxWidth, boxHeight);
         final boxPaint = Paint()
-          ..color = Colors.white
+          ..color = isDark ? const Color(0xFF1E293B) : Colors.white
           ..style = PaintingStyle.fill;
         final borderPaint = Paint()
-          ..color = Colors.grey.shade200
+          ..color = isDark ? Colors.white24 : const Color(0xFFE2E8F0)
           ..strokeWidth = 1
           ..style = PaintingStyle.stroke;
 
-        // Shadow for the popup box
         final RRect rrect = RRect.fromRectAndRadius(boxRect, const Radius.circular(8));
         canvas.drawRRect(rrect, boxPaint);
         canvas.drawRRect(rrect, borderPaint);
 
-        // Text inside popup box
-        const textStyleDay = TextStyle(
-          color: Colors.grey,
+        // Day label and formatted Revenue
+        final String dayText = i < labels.length ? labels[i] : 'Day ${i + 1}';
+        final String valText = '₱${data[i].toStringAsFixed(data[i] % 1 == 0 ? 0 : 2)}';
+
+        final textStyleDay = TextStyle(
+          color: isDark ? Colors.white60 : Colors.grey.shade600,
           fontSize: 9,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
         );
-        const textStyleVal = TextStyle(
-          color: Colors.black,
+        final textStyleVal = TextStyle(
+          color: isDark ? Colors.white : const Color(0xFF0F172A),
           fontSize: 11,
           fontWeight: FontWeight.bold,
         );
 
         final textPainterDay = TextPainter(
-          text: const TextSpan(text: 'Friday', style: textStyleDay),
+          text: TextSpan(text: dayText, style: textStyleDay),
           textDirection: TextDirection.ltr,
         )..layout();
 
         final textPainterVal = TextPainter(
-          text: const TextSpan(text: '₱12,450', style: textStyleVal),
+          text: TextSpan(text: valText, style: textStyleVal),
           textDirection: TextDirection.ltr,
         )..layout();
 
         textPainterDay.paint(
           canvas,
-          Offset(pt.dx - textPainterDay.width / 2, pt.dy - 50),
+          Offset(boxLeft + (boxWidth - textPainterDay.width) / 2, boxTop + 4),
         );
         textPainterVal.paint(
           canvas,
-          Offset(pt.dx - textPainterVal.width / 2, pt.dy - 38),
+          Offset(boxLeft + (boxWidth - textPainterVal.width) / 2, boxTop + 18),
         );
       }
     }
@@ -537,15 +624,37 @@ class _SalesOverviewPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SalesOverviewPainter oldDelegate) =>
-      oldDelegate.data != data;
+      oldDelegate.data != data ||
+      oldDelegate.selectedIndex != selectedIndex ||
+      oldDelegate.isDark != isDark;
 }
 
-/// Renders a beautiful Order Status donut chart with custom stats.
+/// Renders a live, real-time Order Status donut chart.
 class OrderStatusDonutChart extends StatelessWidget {
-  const OrderStatusDonutChart({super.key});
+  final int completedCount;
+  final int onDeliveryCount;
+  final int pendingCount;
+  final int cancelledCount;
+  final bool isDark;
+
+  const OrderStatusDonutChart({
+    super.key,
+    this.completedCount = 0,
+    this.onDeliveryCount = 0,
+    this.pendingCount = 0,
+    this.cancelledCount = 0,
+    this.isDark = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final int total = completedCount + onDeliveryCount + pendingCount + cancelledCount;
+
+    final double pctCompleted = total > 0 ? completedCount / total : 0.0;
+    final double pctOnDelivery = total > 0 ? onDeliveryCount / total : 0.0;
+    final double pctPending = total > 0 ? pendingCount / total : 0.0;
+    final double pctCancelled = total > 0 ? cancelledCount / total : 0.0;
+
     return Center(
       child: SizedBox(
         width: 160,
@@ -554,26 +663,30 @@ class OrderStatusDonutChart extends StatelessWidget {
           children: [
             Positioned.fill(
               child: CustomPaint(
-                painter: _DonutChartPainter(),
+                painter: _DonutChartPainter(
+                  percentages: [pctCompleted, pctOnDelivery, pctPending, pctCancelled],
+                  total: total,
+                  isDark: isDark,
+                ),
               ),
             ),
             Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
+                children: [
                   Text(
-                    '128',
+                    '$total',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
-                      color: Color(0xFF1E293B),
+                      color: isDark ? Colors.white : const Color(0xFF1E293B),
                     ),
                   ),
                   Text(
-                    'Total',
+                    'Total Orders',
                     style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
+                      fontSize: 11,
+                      color: isDark ? Colors.white60 : Colors.grey.shade500,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -588,9 +701,19 @@ class OrderStatusDonutChart extends StatelessWidget {
 }
 
 class _DonutChartPainter extends CustomPainter {
+  final List<double> percentages;
+  final int total;
+  final bool isDark;
+
+  _DonutChartPainter({
+    required this.percentages,
+    required this.total,
+    this.isDark = false,
+  });
+
   @override
   void paint(Canvas canvas, Size size) {
-    final double strokeWidth = 24.0;
+    const double strokeWidth = 22.0;
     final Rect rect = Rect.fromLTWH(
       strokeWidth / 2,
       strokeWidth / 2,
@@ -598,36 +721,662 @@ class _DonutChartPainter extends CustomPainter {
       size.height - strokeWidth,
     );
 
-    // Values:
-    // Completed: 53% (teal)
-    // On Delivery: 25% (light blue)
-    // Pending: 14% (orange/amber)
-    // Cancelled: 8% (red/pink)
-
-    final List<double> percentages = [0.53, 0.25, 0.14, 0.08];
+    // Colors matching theme:
+    // Completed: Teal / Sky Blue
+    // On Delivery: Bright Blue
+    // Pending: Amber / Orange
+    // Cancelled: Rose / Red
     final List<Color> colors = [
-      const Color(0xFF0284C7), // Teal
-      const Color(0xFF0284C7), // Light Blue
-      const Color(0xFFF59E0B), // Orange
-      const Color(0xFFEF4444), // Red
+      const Color(0xFF0284C7), // Completed (Teal/Sky)
+      const Color(0xFF38BDF8), // On Delivery (Cyan/Blue)
+      const Color(0xFFF59E0B), // Pending (Amber)
+      const Color(0xFFEF4444), // Cancelled (Red)
     ];
+
+    if (total == 0) {
+      // Draw placeholder empty ring
+      final emptyPaint = Paint()
+        ..color = (isDark ? Colors.white12 : const Color(0xFFE2E8F0))
+        ..strokeWidth = strokeWidth
+        ..style = PaintingStyle.stroke;
+      canvas.drawArc(rect, 0, 2 * pi, false, emptyPaint);
+      return;
+    }
 
     double startAngle = -pi / 2; // Start at the top
 
     for (int i = 0; i < percentages.length; i++) {
       final double sweepAngle = 2 * pi * percentages[i];
+      if (sweepAngle <= 0.001) continue;
+
       final paint = Paint()
         ..color = colors[i]
         ..strokeWidth = strokeWidth
         ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.square; // flat edges to align segments correctly
+        ..strokeCap = StrokeCap.square;
 
-      // Draw arc
       canvas.drawArc(rect, startAngle, sweepAngle, false, paint);
       startAngle += sweepAngle;
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _DonutChartPainter oldDelegate) =>
+      oldDelegate.percentages != percentages ||
+      oldDelegate.total != total ||
+      oldDelegate.isDark != isDark;
+}
+
+/// Live Interactive Fleet GPS Route Monitor with Real-Time Telemetry & Vector Roads
+class LiveFleetGpsMapWidget extends StatefulWidget {
+  final List<OrderModel> orders;
+  final List<UserModel> drivers;
+  final OrderModel? selectedOrder;
+  final ValueChanged<OrderModel>? onSelectOrder;
+  final bool isDark;
+  final bool satelliteMode;
+
+  const LiveFleetGpsMapWidget({
+    super.key,
+    required this.orders,
+    required this.drivers,
+    this.selectedOrder,
+    this.onSelectOrder,
+    this.isDark = false,
+    this.satelliteMode = false,
+  });
+
+  @override
+  State<LiveFleetGpsMapWidget> createState() => _LiveFleetGpsMapWidgetState();
+}
+
+class _LiveFleetGpsMapWidgetState extends State<LiveFleetGpsMapWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+  final TransformationController _transformController = TransformationController();
+  double _currentScale = 1.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    _transformController.dispose();
+    super.dispose();
+  }
+
+  void _zoomIn() {
+    setState(() {
+      _currentScale = (_currentScale * 1.25).clamp(0.7, 3.0);
+      _transformController.value = Matrix4.diagonal3Values(_currentScale, _currentScale, 1.0);
+    });
+  }
+
+  void _zoomOut() {
+    setState(() {
+      _currentScale = (_currentScale / 1.25).clamp(0.7, 3.0);
+      _transformController.value = Matrix4.diagonal3Values(_currentScale, _currentScale, 1.0);
+    });
+  }
+
+  void _resetView() {
+    setState(() {
+      _currentScale = 1.0;
+      _transformController.value = Matrix4.identity();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final mapBgColor = widget.satelliteMode
+        ? (isDark ? const Color(0xFF0F172A) : const Color(0xFF1E293B))
+        : (isDark ? const Color(0xFF131D2D) : const Color(0xFFF1F5F9));
+
+    return Container(
+      height: 380,
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: mapBgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
+          width: 1.5,
+        ),
+      ),
+      child: Stack(
+        children: [
+          // Animated Canvas Map with interactive pan and zoom
+          Positioned.fill(
+            child: InteractiveViewer(
+              transformationController: _transformController,
+              minScale: 0.7,
+              maxScale: 3.0,
+              boundaryMargin: const EdgeInsets.all(100),
+              child: AnimatedBuilder(
+                animation: _animController,
+                builder: (context, child) {
+                  return CustomPaint(
+                    size: const Size(1000, 500),
+                    painter: _FleetLiveMapCanvasPainter(
+                      orders: widget.orders,
+                      drivers: widget.drivers,
+                      selectedOrder: widget.selectedOrder,
+                      animProgress: _animController.value,
+                      isDark: isDark,
+                      satelliteMode: widget.satelliteMode,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+
+          // Map Header Legend & Badge
+          Positioned(
+            top: 14,
+            left: 14,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF0F172A).withValues(alpha: 0.88) : Colors.white.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: isDark ? Colors.white12 : const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF10B981),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'GPS Live Feed • Ligao City Grid',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : const Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '${widget.orders.where((o) => o.orderStatus == OrderStatus.onDelivery || o.orderStatus == OrderStatus.assigned).length} Active Vehicles',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Map Control Floating Action Buttons (Zoom / Center)
+          Positioned(
+            top: 14,
+            right: 14,
+            child: Column(
+              children: [
+                _buildMapButton(
+                  icon: Icons.add_rounded,
+                  tooltip: 'Zoom In',
+                  isDark: isDark,
+                  onTap: _zoomIn,
+                ),
+                const SizedBox(height: 6),
+                _buildMapButton(
+                  icon: Icons.remove_rounded,
+                  tooltip: 'Zoom Out',
+                  isDark: isDark,
+                  onTap: _zoomOut,
+                ),
+                const SizedBox(height: 6),
+                _buildMapButton(
+                  icon: Icons.center_focus_strong_rounded,
+                  tooltip: 'Reset to Hub',
+                  isDark: isDark,
+                  onTap: _resetView,
+                ),
+              ],
+            ),
+          ),
+
+          // Selected Delivery Telemetry Card (Bottom Drawer on Map)
+          if (widget.selectedOrder != null)
+            Positioned(
+              left: 14,
+              right: 14,
+              bottom: 14,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF0F172A).withValues(alpha: 0.94) : Colors.white.withValues(alpha: 0.96),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.4),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.delivery_dining_rounded,
+                        color: AppTheme.primaryColor,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                widget.selectedOrder!.id,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: isDark ? Colors.white : const Color(0xFF1E293B),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: widget.selectedOrder!.orderStatus.color.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  widget.selectedOrder!.orderStatus.displayName,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: widget.selectedOrder!.orderStatus.color,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'To: ${widget.selectedOrder!.customerName} • ${widget.selectedOrder!.deliveryAddress}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? Colors.white70 : Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.speed_rounded, size: 14, color: Colors.cyan),
+                            const SizedBox(width: 4),
+                            Text(
+                              '28 km/h',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : const Color(0xFF1E293B),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'ETA: ~8 mins (${widget.selectedOrder!.distance})',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF10B981),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMapButton({
+    required IconData icon,
+    required String tooltip,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: isDark ? const Color(0xFF1E293B).withValues(alpha: 0.9) : Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(8),
+        elevation: 2,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              size: 18,
+              color: isDark ? Colors.white70 : const Color(0xFF1E293B),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FleetLiveMapCanvasPainter extends CustomPainter {
+  final List<OrderModel> orders;
+  final List<UserModel> drivers;
+  final OrderModel? selectedOrder;
+  final double animProgress;
+  final bool isDark;
+  final bool satelliteMode;
+
+  _FleetLiveMapCanvasPainter({
+    required this.orders,
+    required this.drivers,
+    this.selectedOrder,
+    required this.animProgress,
+    required this.isDark,
+    required this.satelliteMode,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double width = size.width;
+    final double height = size.height;
+
+    // Central Station Hub Coordinate (Center-Left of map)
+    final Offset hubCoord = Offset(width * 0.22, height * 0.52);
+
+    // 1. Draw Map Grid Terrain / Land Background
+    final landPaint = Paint()
+      ..color = satelliteMode
+          ? (isDark ? const Color(0xFF0F172A) : const Color(0xFF1E293B))
+          : (isDark ? const Color(0xFF111827) : const Color(0xFFF8FAFC));
+    canvas.drawRect(Rect.fromLTWH(0, 0, width, height), landPaint);
+
+    // 2. Draw Vector Roads & Avenues
+    final roadColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0);
+    final mainRoadColor = isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1);
+
+    final roadPaint = Paint()
+      ..color = roadColor
+      ..strokeWidth = 14.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final mainRoadPaint = Paint()
+      ..color = mainRoadColor
+      ..strokeWidth = 22.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final roadLinePaint = Paint()
+      ..color = (isDark ? Colors.white12 : Colors.white)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    // Main East-West Highway
+    final highwayPath = Path()
+      ..moveTo(0, height * 0.52)
+      ..lineTo(width, height * 0.52);
+    canvas.drawPath(highwayPath, mainRoadPaint);
+    canvas.drawPath(highwayPath, roadLinePaint);
+
+    // Secondary Cross Avenues
+    final List<Path> roads = [
+      Path()..moveTo(width * 0.22, 0)..lineTo(width * 0.22, height),
+      Path()..moveTo(width * 0.45, 0)..lineTo(width * 0.45, height),
+      Path()..moveTo(width * 0.70, 0)..lineTo(width * 0.70, height),
+      Path()..moveTo(width * 0.88, 0)..lineTo(width * 0.88, height),
+      Path()..moveTo(0, height * 0.24)..lineTo(width, height * 0.24),
+      Path()..moveTo(0, height * 0.78)..lineTo(width, height * 0.78),
+      // Diagonal Connector
+      Path()..moveTo(width * 0.22, height * 0.52)..lineTo(width * 0.45, height * 0.24),
+      Path()..moveTo(width * 0.45, height * 0.52)..lineTo(width * 0.70, height * 0.78),
+      Path()..moveTo(width * 0.70, height * 0.52)..lineTo(width * 0.88, height * 0.24),
+    ];
+
+    for (var r in roads) {
+      canvas.drawPath(r, roadPaint);
+      canvas.drawPath(r, roadLinePaint);
+    }
+
+    // 3. Draw City Neighborhood Blocks & Landmarks
+    final blockPaint = Paint()
+      ..color = isDark ? const Color(0xFF0F172A) : const Color(0xFFEDE9FE).withValues(alpha: 0.5)
+      ..style = PaintingStyle.fill;
+
+    final blockBorder = Paint()
+      ..color = isDark ? Colors.white10 : const Color(0xFFDDD6FE).withValues(alpha: 0.7)
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    final List<Rect> blocks = [
+      Rect.fromLTWH(width * 0.05, height * 0.05, width * 0.14, height * 0.16),
+      Rect.fromLTWH(width * 0.25, height * 0.05, width * 0.17, height * 0.16),
+      Rect.fromLTWH(width * 0.48, height * 0.05, width * 0.19, height * 0.16),
+      Rect.fromLTWH(width * 0.73, height * 0.05, width * 0.12, height * 0.16),
+      Rect.fromLTWH(width * 0.05, height * 0.58, width * 0.14, height * 0.17),
+      Rect.fromLTWH(width * 0.25, height * 0.58, width * 0.17, height * 0.17),
+      Rect.fromLTWH(width * 0.48, height * 0.58, width * 0.19, height * 0.17),
+      Rect.fromLTWH(width * 0.73, height * 0.58, width * 0.12, height * 0.17),
+    ];
+
+    for (var b in blocks) {
+      final RRect rr = RRect.fromRectAndRadius(b, const Radius.circular(8));
+      canvas.drawRRect(rr, blockPaint);
+      canvas.drawRRect(rr, blockBorder);
+    }
+
+    // 4. Plot Delivery Destination Pins & Real-Time Driver Routes
+    // Generate deterministic coordinate offsets across the city map for each order
+    final displayOrders = orders.take(8).toList();
+
+    for (int i = 0; i < displayOrders.length; i++) {
+      final o = displayOrders[i];
+      final isSelected = selectedOrder?.id == o.id;
+      final bool isActive = o.orderStatus == OrderStatus.onDelivery || o.orderStatus == OrderStatus.assigned;
+      final bool isCompleted = o.orderStatus == OrderStatus.completed;
+
+      // Deterministic position on grid
+      final hash = o.deliveryAddress.hashCode.abs() + i * 37;
+      final double destX = width * (0.35 + ((hash % 55) / 100.0));
+      final double destY = height * (0.15 + (((hash >> 3) % 70) / 100.0));
+      final Offset destCoord = Offset(destX, destY);
+
+      // Interpolate driver vehicle location between Hub and Destination
+      final double driverCycleProgress = (animProgress + (i * 0.25)) % 1.0;
+      final double transitProgress = isActive ? driverCycleProgress : (isCompleted ? 1.0 : 0.0);
+
+      final Offset driverPos = Offset(
+        hubCoord.dx + (destCoord.dx - hubCoord.dx) * transitProgress,
+        hubCoord.dy + (destCoord.dy - hubCoord.dy) * transitProgress,
+      );
+
+      // Draw Glowing Route Polyline from Hub to Destination
+      final routeColor = isSelected
+          ? const Color(0xFF0284C7)
+          : (isActive ? const Color(0xFF38BDF8) : (isCompleted ? const Color(0xFF10B981) : Colors.amber));
+
+      final routePaint = Paint()
+        ..color = routeColor.withValues(alpha: isSelected ? 0.9 : 0.6)
+        ..strokeWidth = isSelected ? 4.0 : 2.5
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round;
+
+      canvas.drawLine(hubCoord, destCoord, routePaint);
+
+      // Draw Animated Dash Pulse flowing towards destination
+      if (isActive) {
+        final dashPaint = Paint()
+          ..color = Colors.white.withValues(alpha: 0.9)
+          ..strokeWidth = isSelected ? 5.0 : 3.5
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round;
+
+        final double pulseX = hubCoord.dx + (destCoord.dx - hubCoord.dx) * driverCycleProgress;
+        final double pulseY = hubCoord.dy + (destCoord.dy - hubCoord.dy) * driverCycleProgress;
+        canvas.drawCircle(Offset(pulseX, pulseY), 4, dashPaint);
+      }
+
+      // Draw Customer Delivery Destination Pin
+      final pinPaint = Paint()
+        ..color = isSelected ? const Color(0xFFF43F5E) : (isCompleted ? const Color(0xFF10B981) : const Color(0xFF6366F1))
+        ..style = PaintingStyle.fill;
+
+      canvas.drawCircle(destCoord, isSelected ? 9 : 7, pinPaint);
+      canvas.drawCircle(
+        destCoord,
+        isSelected ? 14 : 11,
+        Paint()
+          ..color = (isSelected ? const Color(0xFFF43F5E) : const Color(0xFF6366F1)).withValues(alpha: 0.25)
+          ..style = PaintingStyle.fill,
+      );
+
+      // Destination Label
+      final destPainter = TextPainter(
+        text: TextSpan(
+          text: o.customerName.split(' ').first,
+          style: TextStyle(
+            color: isDark ? Colors.white : const Color(0xFF1E293B),
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+            backgroundColor: (isDark ? const Color(0xFF0F172A) : Colors.white).withValues(alpha: 0.8),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      destPainter.paint(canvas, Offset(destCoord.dx - destPainter.width / 2, destCoord.dy + 12));
+
+      // Draw Animated Moving Driver Vehicle Icon
+      if (isActive) {
+        final vehiclePaint = Paint()
+          ..color = const Color(0xFF0284C7)
+          ..style = PaintingStyle.fill;
+
+        canvas.drawCircle(driverPos, isSelected ? 12 : 9, vehiclePaint);
+        canvas.drawCircle(
+          driverPos,
+          isSelected ? 18 : 14,
+          Paint()
+            ..color = const Color(0xFF0284C7).withValues(alpha: 0.3)
+            ..style = PaintingStyle.fill,
+        );
+
+        // Driver Name Tag
+        final driverLabel = o.driverName != null ? o.driverName!.split(' ').first : 'Rider';
+        final driverPainter = TextPainter(
+          text: TextSpan(
+            text: '🏍️ $driverLabel',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 8,
+              fontWeight: FontWeight.w900,
+              backgroundColor: Color(0xFF0284C7),
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        driverPainter.paint(canvas, Offset(driverPos.dx - driverPainter.width / 2, driverPos.dy - 16));
+      }
+    }
+
+    // 5. Draw Water Refilling Station Central Hub Beacon
+    // Pulsing radar ripple circles
+    final rippleRadius = 14 + (animProgress * 22);
+    final ripplePaint = Paint()
+      ..color = AppTheme.primaryColor.withValues(alpha: (1.0 - animProgress).clamp(0.0, 1.0) * 0.5)
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+    canvas.drawCircle(hubCoord, rippleRadius, ripplePaint);
+
+    // Hub Solid Pin
+    final hubPaint = Paint()
+      ..color = AppTheme.primaryColor
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(hubCoord, 14, hubPaint);
+
+    final hubInner = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(hubCoord, 6, hubInner);
+
+    // Hub Text Label
+    final hubTextPainter = TextPainter(
+      text: const TextSpan(
+        text: '💧 JJAASS Central Hub',
+        style: TextStyle(
+          color: Color(0xFF0284C7),
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    hubTextPainter.paint(canvas, Offset(hubCoord.dx - hubTextPainter.width / 2, hubCoord.dy + 18));
+  }
+
+  @override
+  bool shouldRepaint(covariant _FleetLiveMapCanvasPainter oldDelegate) => true;
 }
