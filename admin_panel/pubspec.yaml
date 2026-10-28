@@ -45,6 +45,9 @@ dependencies:
   path_provider: ^2.1.1
   web: ^1.0.0
 
+dependency_overrides:
+  image: 4.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
