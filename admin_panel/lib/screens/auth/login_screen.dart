@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/constants/app_constants.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/helpers.dart';
@@ -58,10 +57,18 @@ class _LoginScreenState extends State<LoginScreen> {
   void _routeToDashboard(UserRole role) {
     switch (role) {
       case UserRole.customer:
-        Helpers.showSnackBar(context, 'Customer accounts must use the Mobile App.', isError: true);
+        Helpers.showSnackBar(
+          context,
+          'Customer accounts must use the Mobile App.',
+          isError: true,
+        );
         break;
       case UserRole.driver:
-        Helpers.showSnackBar(context, 'Driver accounts must use the Mobile App.', isError: true);
+        Helpers.showSnackBar(
+          context,
+          'Driver accounts must use the Mobile App.',
+          isError: true,
+        );
         break;
       case UserRole.admin:
         Navigator.of(context).pushReplacementNamed(AppRoutes.adminDashboard);
@@ -71,10 +78,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
     final isDesktop = size.width >= 700;
-    final isDark = theme.brightness == Brightness.dark;
 
     Widget formContent() {
       return Form(
@@ -83,42 +88,72 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // App logo / header icon
+            // Full Brand Header matching JJAASS Water Market Logo
             Center(
               child: Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                  color: const Color(0xFFEFF6FF),
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: AppTheme.primaryColor.withValues(alpha: 0.12),
-                    width: 1,
+                    color: AppTheme.secondaryColor.withValues(alpha: 0.4),
+                    width: 2,
                   ),
                 ),
-                child: const WaterDropletLogo(size: 60),
+                child: const WaterDropletLogo(size: 76),
               ),
             ),
-            const SizedBox(height: 20),
-            // Welcoming Header
-            Center(
+            const SizedBox(height: 16),
+            const Center(
               child: Text(
-                AppConstants.appName,
-                style: theme.textTheme.headlineSmall?.copyWith(
+                'JJAASS',
+                style: TextStyle(
+                  fontSize: 30,
                   fontWeight: FontWeight.w900,
-                  color: AppTheme.primaryColor,
-                  letterSpacing: 0.5,
+                  color: AppTheme.navyColor,
+                  letterSpacing: 2.2,
                 ),
               ),
             ),
             const SizedBox(height: 4),
             Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 22,
+                    height: 1.8,
+                    color: AppTheme.navyColor,
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child: Text(
+                      'WATER MARKET',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2.8,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: 22,
+                    height: 1.8,
+                    color: AppTheme.navyColor,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Center(
               child: Text(
-                'WATER REFILLING STATION',
+                'Sign in to the Admin Management Console',
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 3.0,
-                  color: Colors.grey.shade500,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.mutedText,
                 ),
               ),
             ),
@@ -170,13 +205,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   'Forgot Password?',
                   style: TextStyle(
                     color: AppTheme.primaryColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Consumer<AuthProvider>(
               builder: (context, auth, _) {
                 return CustomButton(
@@ -184,36 +219,42 @@ class _LoginScreenState extends State<LoginScreen> {
                   isLoading: auth.isLoading,
                   onPressed: _handleLogin,
                   gradientColors: const [
+                    AppTheme.navyColor,
                     AppTheme.primaryColor,
-                    AppTheme.secondaryColor,
                   ],
                 );
               },
             ),
             const SizedBox(height: 24),
-            // Go to registration page
-            Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(
-                  "Don't have an account? ",
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).pushNamed(AppRoutes.register);
-                  },
-                  child: const Text(
-                    'Sign Up',
+            Center(
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text(
+                    "Don't have an account? ",
                     style: TextStyle(
-                      color: AppTheme.primaryColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      color: AppTheme.mutedText,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                ),
-              ],
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).pushNamed(AppRoutes.register);
+                    },
+                    child: const Text(
+                      'Sign Up',
+                      style: TextStyle(
+                        color: AppTheme.navyColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -221,40 +262,35 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     return Scaffold(
+      backgroundColor: AppTheme.lightBg,
       body: WaveBackground(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: isDesktop
-                ? Container(
-                    width: 450,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 40,
-                      vertical: 48,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppTheme.darkSurface : Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.white10
-                            : const Color(0xFFE2E8F0),
-                        width: 1.0,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.04),
-                          blurRadius: 24,
-                          offset: const Offset(0, 12),
-                        ),
-                      ],
-                    ),
-                    child: formContent(),
-                  )
-                : Container(
-                    constraints: const BoxConstraints(maxWidth: 450),
-                    child: formContent(),
+            padding: const EdgeInsets.all(20.0),
+            child: Container(
+              width: isDesktop ? 460 : double.infinity,
+              constraints: const BoxConstraints(maxWidth: 460),
+              padding: EdgeInsets.symmetric(
+                horizontal: isDesktop ? 40 : 24,
+                vertical: isDesktop ? 44 : 32,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppTheme.borderColor,
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.navyColor.withValues(alpha: 0.08),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
                   ),
+                ],
+              ),
+              child: formContent(),
+            ),
           ),
         ),
       ),

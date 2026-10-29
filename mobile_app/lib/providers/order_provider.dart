@@ -234,7 +234,9 @@ class OrderProvider extends ChangeNotifier {
   }
 
   void deductProductStock(String name, int qty) {
-    final idx = _inventoryItems.indexWhere((p) => p['name'] == name);
+    final idx = _inventoryItems.indexWhere(
+      (p) => p['name'] == name || name.startsWith('${p['name']} ('),
+    );
     if (idx != -1) {
       final currentStock = (_inventoryItems[idx]['stock'] as num).toDouble();
       _inventoryItems[idx]['stock'] = max(0.0, currentStock - qty);
@@ -488,6 +490,73 @@ class OrderProvider extends ChangeNotifier {
     _isLoading = false;
     notifyListeners();
     return newOrder;
+  }
+
+  Future<bool> cancelCustomerOrder({
+    required String orderId,
+    String? reason,
+  }) async {
+    final index = _orders.indexWhere((o) => o.id == orderId);
+    if (index == -1) return false;
+
+    final order = _orders[index];
+    if (order.orderStatus == OrderStatus.completed ||
+        order.orderStatus == OrderStatus.cancelled) {
+      return false;
+    }
+
+    // Restore product stock and container reserves
+    final prodIdx = _inventoryItems.indexWhere(
+      (p) =>
+          p['name'] == order.waterType ||
+          order.waterType.startsWith('${p['name']} ('),
+    );
+    if (prodIdx != -1) {
+      final capacity = (_inventoryItems[prodIdx]['capacity'] as num).toDouble();
+      final currentStock = (_inventoryItems[prodIdx]['stock'] as num)
+          .toDouble();
+      _inventoryItems[prodIdx]['stock'] = min(
+        capacity,
+        currentStock + order.quantity,
+      );
+      _syncInventoryToSupabase(_inventoryItems[prodIdx], action: 'update');
+    }
+    adjustContainerReserves(
+      emptyChange: -order.quantity,
+      refilledChange: order.quantity,
+    );
+
+    order.orderStatus = OrderStatus.cancelled;
+
+    if (_isSupabaseConfigured) {
+      try {
+        final client = Supabase.instance.client;
+        final updateMap = <String, dynamic>{
+          'orderStatus': OrderStatus.cancelled.name,
+        };
+        if (reason != null && reason.trim().isNotEmpty) {
+          final existingNote = order.deliveryNote;
+          updateMap['deliveryNote'] =
+              (existingNote != null && existingNote.isNotEmpty)
+              ? '$existingNote | Cancelled: ${reason.trim()}'
+              : 'Cancelled: ${reason.trim()}';
+        }
+        try {
+          await client.from('orders').update(updateMap).eq('id', orderId);
+        } catch (_) {
+          await client
+              .from('orders')
+              .update({'orderStatus': OrderStatus.cancelled.name})
+              .eq('id', orderId);
+        }
+        await fetchSupabaseOrders(silent: true);
+      } catch (e) {
+        debugPrint('Supabase cancel order error: $e');
+      }
+    }
+
+    notifyListeners();
+    return true;
   }
 
   // Driver Actions

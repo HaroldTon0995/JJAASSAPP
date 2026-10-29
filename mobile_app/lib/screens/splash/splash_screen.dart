@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/routes/app_routes.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/water_widgets.dart';
@@ -36,7 +37,7 @@ class _SplashScreenState extends State<SplashScreen> {
     }
   }
 
-  void _routeToDashboard(UserRole? role) {
+  Future<void> _routeToDashboard(UserRole? role) async {
     if (!mounted) return;
     if (role == null) {
       Navigator.of(context).pushReplacementNamed(AppRoutes.login);
@@ -51,7 +52,10 @@ class _SplashScreenState extends State<SplashScreen> {
         Navigator.of(context).pushReplacementNamed(AppRoutes.driverDashboard);
         break;
       case UserRole.admin:
-        Navigator.of(context).pushReplacementNamed(AppRoutes.adminDashboard);
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        await authProvider.logout();
+        if (!mounted) return;
+        Navigator.of(context).pushReplacementNamed(AppRoutes.login);
         break;
     }
   }
@@ -65,8 +69,8 @@ class _SplashScreenState extends State<SplashScreen> {
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Color(0xFF0369A1), // Deep light blue (Sky 700)
-              Color(0xFF0284C7), // Light blue (Sky 600)
+              AppTheme.navyColor, // Deep Navy (#0F2B5C)
+              AppTheme.primaryColor, // Rich Water Blue (#1D63B8)
             ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -90,39 +94,61 @@ class _SplashScreenState extends State<SplashScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppTheme.secondaryColor.withValues(alpha: 0.5),
+                      width: 3,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      )
+                        color: Colors.black.withValues(alpha: 0.22),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
                     ],
                   ),
-                  child: const WaterDropletLogo(size: 80),
+                  child: const WaterDropletLogo(size: 96),
                 ),
                 const SizedBox(height: 28),
                 const Text(
-                  AppConstants.appName,
+                  'JJAASS',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 32,
+                    fontSize: 36,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: 1.5,
+                    letterSpacing: 3.0,
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  'WATER REFILLING STATION',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 4.0,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 2,
+                      color: const Color(0xFF93C5FD),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'WATER MARKET',
+                        style: TextStyle(
+                          color: Color(0xFFBFDBFE),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 3.5,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 28,
+                      height: 2,
+                      color: const Color(0xFF93C5FD),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 48),
                 const SizedBox(

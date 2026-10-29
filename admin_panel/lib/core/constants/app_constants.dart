@@ -33,6 +33,11 @@ class AppConstants {
   static const String paymongoPublicKey = 'pk_test_Y2Rq8RD2whVztowJYaEaAo7p';
 
   // Gemini API Configuration for AquaBot Support
-  // Replace with a valid Gemini API Key to enable AI chat support. If empty or invalid, the app uses a smart offline fallback context parser.
-  static const String geminiApiKey = '';
+  // Get your free Gemini API key at: https://aistudio.google.com/app/apikey
+  // You can paste your key here, pass --dart-define=GEMINI_API_KEY=your_key,
+  // or set it directly inside the AquaBot chat header in the app.
+  static const String geminiApiKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: '',
+  );
 }

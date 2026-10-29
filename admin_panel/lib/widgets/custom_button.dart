@@ -18,27 +18,27 @@ class CustomButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = gradientColors ?? [
+      AppTheme.navyColor,
       AppTheme.primaryColor,
-      AppTheme.secondaryColor,
     ];
 
     return Container(
       width: double.infinity,
-      height: 56,
+      height: 54,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isLoading ? [Colors.grey.shade400, Colors.grey.shade500] : colors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
         ),
         borderRadius: BorderRadius.circular(14),
         boxShadow: isLoading
             ? []
             : [
                 BoxShadow(
-                  color: colors.first.withValues(alpha: 0.3),
+                  color: AppTheme.navyColor.withValues(alpha: 0.25),
                   blurRadius: 12,
-                  offset: const Offset(0, 6),
+                  offset: const Offset(0, 5),
                 ),
               ],
       ),
@@ -65,8 +65,8 @@ class CustomButton extends StatelessWidget {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
                 ),
               ),
       ),

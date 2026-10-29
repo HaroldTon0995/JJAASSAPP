@@ -5,37 +5,38 @@ import '../../core/theme/app_theme.dart';
 /// CUSTOMER APP DESIGN SYSTEM & CSS-EQUIVALENT STYLES
 /// ============================================================================
 
-/// Palette of curated colors specific to Customer Portal & Mobile features
+/// Palette of curated colors matched to the JJAASS Water Market Logo
 class CustomerColors {
-  // Brand
-  static const Color primary = AppTheme.primaryColor; // 0xFF0284C7
-  static const Color secondary = AppTheme.secondaryColor; // 0xFF38BDF8
-  static const Color accent = AppTheme.accentColor; // 0xFF00B4D8
+  // Brand (Deep Navy & Water Market Azure)
+  static const Color navy = AppTheme.navyColor; // 0xFF0F2B5C
+  static const Color primary = AppTheme.primaryColor; // 0xFF1D63B8
+  static const Color secondary = AppTheme.secondaryColor; // 0xFF4788D7
+  static const Color accent = AppTheme.accentColor; // 0xFF0284C7
 
-  // Neutral / Layouts
-  static const Color background = Color(0xFFF8FAFC);
+  // Neutral / High-Readability Layouts
+  static const Color background = Color(0xFFF1F5F9);
   static const Color surface = Colors.white;
-  static const Color surfaceDark = Color(0xFF1E293B);
-  static const Color border = Color(0xFFE2E8F0);
-  static const Color borderLight = Color(0xFFF1F5F9);
-  static const Color borderDark = Color(0xFF334155);
+  static const Color surfaceDark = Colors.white;
+  static const Color border = Color(0xFFCBD5E1);
+  static const Color borderLight = Color(0xFFE2E8F0);
+  static const Color borderDark = Color(0xFFCBD5E1);
 
-  // Typography
-  static const Color textMain = Color(0xFF0F172A);
-  static const Color textHeading = Color(0xFF1E293B);
-  static const Color textMuted = Color(0xFF64748B);
-  static const Color textSubtle = Color(0xFF94A3B8);
+  // High-Contrast Typography
+  static const Color textMain = Color(0xFF0F2B5C);
+  static const Color textHeading = Color(0xFF0F2B5C);
+  static const Color textMuted = Color(0xFF334155);
+  static const Color textSubtle = Color(0xFF475569);
 
   // Status & Actions
-  static const Color success = Color(0xFF10B981);
+  static const Color success = Color(0xFF059669);
   static const Color successLight = Color(0xFFECFDF5);
-  static const Color danger = Color(0xFFEF4444);
+  static const Color danger = Color(0xFFDC2626);
   static const Color dangerLight = Color(0xFFFEF2F2);
-  static const Color warning = Color(0xFFF59E0B);
+  static const Color warning = Color(0xFFD97706);
   static const Color warningLight = Color(0xFFFFFBEB);
-  static const Color info = Color(0xFF3B82F6);
+  static const Color info = Color(0xFF1D63B8);
   static const Color infoLight = Color(0xFFEFF6FF);
-  static const Color purple = Color(0xFF8B5CF6);
+  static const Color purple = Color(0xFF7C3AED);
 
   // GCash Integration
   static const Color gcashBlue = Color(0xFF007DFE);
@@ -67,13 +68,13 @@ class CustomerGradients {
   );
 
   static const LinearGradient primaryButton = LinearGradient(
-    colors: [CustomerColors.primary, CustomerColors.secondary],
+    colors: [CustomerColors.navy, CustomerColors.primary],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient loyaltyHero = LinearGradient(
-    colors: [Color(0xFF0284C7), Color(0xFF0369A1)],
+    colors: [CustomerColors.navy, CustomerColors.primary],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -89,8 +90,8 @@ class CustomerGradients {
 class CustomerShadows {
   static List<BoxShadow> soft = [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.04),
-      blurRadius: 10,
+      color: AppTheme.navyColor.withValues(alpha: 0.06),
+      blurRadius: 12,
       offset: const Offset(0, 4),
     ),
   ];
@@ -105,7 +106,7 @@ class CustomerShadows {
 
   static List<BoxShadow> floating = [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.08),
+      color: AppTheme.navyColor.withValues(alpha: 0.1),
       blurRadius: 16,
       offset: const Offset(0, 6),
     ),
@@ -122,11 +123,11 @@ class CustomerDecorations {
     double borderRadius = CustomerDimensions.radiusLarge,
   }) {
     return BoxDecoration(
-      color: backgroundColor ?? (isDark ? CustomerColors.surfaceDark : Colors.white),
+      color: backgroundColor ?? Colors.white,
       borderRadius: BorderRadius.circular(borderRadius),
       border: Border.all(
-        color: borderColor ?? (isDark ? CustomerColors.borderDark : CustomerColors.border),
-        width: 1.0,
+        color: borderColor ?? CustomerColors.border,
+        width: 1.2,
       ),
       boxShadow: CustomerShadows.soft,
     );
@@ -142,18 +143,19 @@ class CustomerDecorations {
   /// Search Bar in Desktop Header (CSS: .search-input-box)
   static BoxDecoration searchBar({bool isDark = false}) {
     return BoxDecoration(
-      color: isDark ? Colors.black26 : const Color(0xFFF1F5F9),
+      color: const Color(0xFFF1F5F9),
       borderRadius: BorderRadius.circular(CustomerDimensions.radiusSmall),
+      border: Border.all(color: CustomerColors.border),
     );
   }
 
   /// Status Badge / Pill (CSS: .badge-pill)
   static BoxDecoration statusBadge(Color color, {bool isDark = false}) {
     return BoxDecoration(
-      color: color.withValues(alpha: isDark ? 0.2 : 0.1),
+      color: color.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(CustomerDimensions.radiusPill),
       border: Border.all(
-        color: color.withValues(alpha: isDark ? 0.4 : 0.25),
+        color: color.withValues(alpha: 0.35),
         width: 1,
       ),
     );
@@ -162,7 +164,7 @@ class CustomerDecorations {
   /// Chat Bubble - AquaBot AI (CSS: .chat-bubble-bot)
   static BoxDecoration botChatBubble({bool isDark = false}) {
     return BoxDecoration(
-      color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+      color: const Color(0xFFEFF6FF),
       borderRadius: const BorderRadius.only(
         topLeft: Radius.circular(4),
         topRight: Radius.circular(16),
@@ -170,7 +172,7 @@ class CustomerDecorations {
         bottomRight: Radius.circular(16),
       ),
       border: Border.all(
-        color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+        color: CustomerColors.secondary.withValues(alpha: 0.35),
         width: 1,
       ),
     );
@@ -196,32 +198,34 @@ class CustomerDecorations {
   }) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: TextStyle(
-        color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
-        fontSize: 13,
+      hintStyle: const TextStyle(
+        color: CustomerColors.textSubtle,
+        fontSize: 13.5,
       ),
       prefixIcon: prefixIcon,
       suffixIcon: suffixIcon,
       filled: true,
-      fillColor: isDark ? CustomerColors.surfaceDark : Colors.white,
+      fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(CustomerDimensions.radiusMedium),
-        borderSide: BorderSide(
-          color: isDark ? CustomerColors.borderDark : CustomerColors.border,
+        borderSide: const BorderSide(
+          color: CustomerColors.border,
+          width: 1.2,
         ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(CustomerDimensions.radiusMedium),
-        borderSide: BorderSide(
-          color: isDark ? CustomerColors.borderDark : CustomerColors.border,
+        borderSide: const BorderSide(
+          color: CustomerColors.border,
+          width: 1.2,
         ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(CustomerDimensions.radiusMedium),
         borderSide: const BorderSide(
-          color: CustomerColors.primary,
-          width: 1.5,
+          color: CustomerColors.navy,
+          width: 2.0,
         ),
       ),
     );
@@ -231,55 +235,55 @@ class CustomerDecorations {
 /// Typography and text styles for the Customer UI
 class CustomerTextStyles {
   static const TextStyle pageTitle = TextStyle(
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: FontWeight.w900,
     color: CustomerColors.textHeading,
     letterSpacing: -0.2,
   );
 
   static const TextStyle sectionHeader = TextStyle(
-    fontSize: 16,
+    fontSize: 16.5,
     fontWeight: FontWeight.w800,
     color: CustomerColors.textHeading,
   );
 
   static const TextStyle cardTitle = TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.w700,
+    fontSize: 15,
+    fontWeight: FontWeight.w800,
     color: CustomerColors.textHeading,
   );
 
   static const TextStyle statValue = TextStyle(
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: FontWeight.w900,
     color: CustomerColors.textMain,
   );
 
   static const TextStyle statLabel = TextStyle(
     color: CustomerColors.textMuted,
-    fontSize: 12,
-    fontWeight: FontWeight.bold,
+    fontSize: 13,
+    fontWeight: FontWeight.w700,
   );
 
   static const TextStyle body = TextStyle(
-    fontSize: 13,
+    fontSize: 14,
     color: CustomerColors.textHeading,
   );
 
   static const TextStyle bodyMuted = TextStyle(
-    fontSize: 12,
+    fontSize: 13,
     color: CustomerColors.textMuted,
   );
 
   static const TextStyle price = TextStyle(
     fontSize: 18,
     fontWeight: FontWeight.w900,
-    color: CustomerColors.primary,
+    color: CustomerColors.navy,
   );
 
   static const TextStyle badge = TextStyle(
-    fontSize: 11,
-    fontWeight: FontWeight.bold,
+    fontSize: 11.5,
+    fontWeight: FontWeight.w800,
   );
 }
 
@@ -346,8 +350,8 @@ class CustomerStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 112),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      constraints: const BoxConstraints(minHeight: 116),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       decoration: CustomerDecorations.card(isDark: isDark),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -362,9 +366,7 @@ class CustomerStatCard extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     title,
-                    style: CustomerTextStyles.statLabel.copyWith(
-                      color: isDark ? const Color(0xFF94A3B8) : CustomerColors.textMuted,
-                    ),
+                    style: CustomerTextStyles.statLabel,
                     maxLines: 1,
                   ),
                 ),
@@ -374,9 +376,7 @@ class CustomerStatCard extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     value,
-                    style: CustomerTextStyles.statValue.copyWith(
-                      color: isDark ? Colors.white : CustomerColors.textMain,
-                    ),
+                    style: CustomerTextStyles.statValue,
                     maxLines: 1,
                   ),
                 ),
@@ -386,10 +386,10 @@ class CustomerStatCard extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     subtitle,
-                    style: TextStyle(
-                      color: isDark ? const Color(0xFF64748B) : CustomerColors.textSubtle,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
+                    style: const TextStyle(
+                      color: CustomerColors.textSubtle,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                     ),
                     maxLines: 1,
                   ),
@@ -397,12 +397,15 @@ class CustomerStatCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: isDark ? 0.18 : 0.1),
+              color: color.withValues(alpha: 0.12),
               shape: BoxShape.circle,
+              border: Border.all(
+                color: color.withValues(alpha: 0.25),
+              ),
             ),
             child: Icon(icon, color: color, size: 26),
           ),

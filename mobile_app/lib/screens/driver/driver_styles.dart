@@ -5,41 +5,41 @@ import '../../core/theme/app_theme.dart';
 /// DRIVER APP DESIGN SYSTEM & CSS-EQUIVALENT STYLES
 /// ============================================================================
 
-/// Palette of curated colors specific to Driver Portal & Mobile GPS navigation
+/// Palette of curated colors matched to the JJAASS Water Market Logo
 class DriverColors {
   // Brand
-  static const Color primary = AppTheme.primaryColor; // 0xFF0284C7
-  static const Color secondary = AppTheme.secondaryColor; // 0xFF38BDF8
-  static const Color accent = AppTheme.accentColor; // 0xFF00B4D8
+  static const Color navy = AppTheme.navyColor; // 0xFF0F2B5C
+  static const Color primary = AppTheme.primaryColor; // 0xFF1D63B8
+  static const Color secondary = AppTheme.secondaryColor; // 0xFF4788D7
+  static const Color accent = AppTheme.accentColor; // 0xFF0284C7
 
-  // Neutral / Layouts
-  static const Color background = Color(0xFFF8FAFC);
+  // Neutral / High-Readability Layouts
+  static const Color background = Color(0xFFF1F5F9);
   static const Color surface = Colors.white;
-  static const Color surfaceDark = Color(0xFF1E293B);
-  static const Color border = Color(0xFFE2E8F0);
-  static const Color borderDark = Colors.white10;
+  static const Color surfaceDark = Colors.white;
+  static const Color border = Color(0xFFCBD5E1);
+  static const Color borderDark = Color(0xFFCBD5E1);
 
   // Typography
-  static const Color textMain = Color(0xFF0F172A);
-  static const Color textHeading = Color(0xFF1E293B);
-  static const Color textMuted = Color(0xFF64748B);
-  static const Color textSubtle = Color(0xFF94A3B8);
+  static const Color textMain = Color(0xFF0F2B5C);
+  static const Color textHeading = Color(0xFF0F2B5C);
+  static const Color textMuted = Color(0xFF334155);
+  static const Color textSubtle = Color(0xFF475569);
 
   // Driver Duty & Navigation
-  static const Color onlinePrimary = Color(0xFF0284C7);
-  static const Color onlineSecondary = Color(0xFF0EA5E9);
+  static const Color onlinePrimary = Color(0xFF0F2B5C);
+  static const Color onlineSecondary = Color(0xFF1D63B8);
   static const Color offlinePrimary = Color(0xFFDC2626);
   static const Color offlineSecondary = Color(0xFFB91C1C);
 
   // Status & Performance
-  static const Color success = Color(0xFF10B981);
+  static const Color success = Color(0xFF059669);
   static const Color successLight = Color(0xFFECFDF5);
-  static const Color warning = Color(0xFFF59E0B);
+  static const Color warning = Color(0xFFD97706);
   static const Color warningLight = Color(0xFFFFFBEB);
-  static const Color danger = Color(0xFFEF4444);
+  static const Color danger = Color(0xFFDC2626);
   static const Color dangerLight = Color(0xFFFEF2F2);
-  static const Color purple = Color(0xFF8B5CF6);
-  static const Color navy = Color(0xFF0F2B5C);
+  static const Color purple = Color(0xFF7C3AED);
 }
 
 /// Spacing, radius and dimensional tokens for Driver UI
@@ -79,7 +79,7 @@ class DriverGradients {
   );
 
   static const LinearGradient primaryButton = LinearGradient(
-    colors: [DriverColors.primary, DriverColors.secondary],
+    colors: [DriverColors.navy, DriverColors.primary],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -89,8 +89,8 @@ class DriverGradients {
 class DriverShadows {
   static List<BoxShadow> soft = [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.04),
-      blurRadius: 10,
+      color: AppTheme.navyColor.withValues(alpha: 0.06),
+      blurRadius: 12,
       offset: const Offset(0, 4),
     ),
   ];
@@ -106,7 +106,7 @@ class DriverShadows {
 
   static List<BoxShadow> floating = [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.08),
+      color: AppTheme.navyColor.withValues(alpha: 0.1),
       blurRadius: 16,
       offset: const Offset(0, 6),
     ),
@@ -123,11 +123,11 @@ class DriverDecorations {
     double borderRadius = DriverDimensions.radiusLarge,
   }) {
     return BoxDecoration(
-      color: backgroundColor ?? (isDark ? DriverColors.surfaceDark : Colors.white),
+      color: backgroundColor ?? Colors.white,
       borderRadius: BorderRadius.circular(borderRadius),
       border: Border.all(
-        color: borderColor ?? (isDark ? DriverColors.borderDark : DriverColors.border),
-        width: 1.0,
+        color: borderColor ?? DriverColors.border,
+        width: 1.2,
       ),
       boxShadow: DriverShadows.soft,
     );
@@ -145,18 +145,19 @@ class DriverDecorations {
   /// Search Bar in Desktop Header (CSS: .driver-search-box)
   static BoxDecoration searchBar({bool isDark = false}) {
     return BoxDecoration(
-      color: isDark ? Colors.black26 : const Color(0xFFF1F5F9),
+      color: const Color(0xFFF1F5F9),
       borderRadius: BorderRadius.circular(DriverDimensions.radiusSmall),
+      border: Border.all(color: DriverColors.border),
     );
   }
 
   /// Status Badge / Pill (CSS: .driver-badge-pill)
   static BoxDecoration statusBadge(Color color, {bool isDark = false}) {
     return BoxDecoration(
-      color: color.withValues(alpha: isDark ? 0.2 : 0.1),
+      color: color.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(DriverDimensions.radiusPill),
       border: Border.all(
-        color: color.withValues(alpha: isDark ? 0.4 : 0.25),
+        color: color.withValues(alpha: 0.35),
         width: 1,
       ),
     );
@@ -165,7 +166,7 @@ class DriverDecorations {
   /// Chat Bubble - AquaBot AI Dispatch (CSS: .driver-chat-bot)
   static BoxDecoration botChatBubble({bool isDark = false}) {
     return BoxDecoration(
-      color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+      color: const Color(0xFFEFF6FF),
       borderRadius: const BorderRadius.only(
         topLeft: Radius.circular(4),
         topRight: Radius.circular(16),
@@ -173,7 +174,7 @@ class DriverDecorations {
         bottomRight: Radius.circular(16),
       ),
       border: Border.all(
-        color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+        color: DriverColors.secondary.withValues(alpha: 0.35),
         width: 1,
       ),
     );
@@ -199,32 +200,34 @@ class DriverDecorations {
   }) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: TextStyle(
-        color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
-        fontSize: 13,
+      hintStyle: const TextStyle(
+        color: DriverColors.textSubtle,
+        fontSize: 13.5,
       ),
       prefixIcon: prefixIcon,
       suffixIcon: suffixIcon,
       filled: true,
-      fillColor: isDark ? DriverColors.surfaceDark : Colors.white,
+      fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(DriverDimensions.radiusMedium),
-        borderSide: BorderSide(
-          color: isDark ? DriverColors.borderDark : DriverColors.border,
+        borderSide: const BorderSide(
+          color: DriverColors.border,
+          width: 1.2,
         ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(DriverDimensions.radiusMedium),
-        borderSide: BorderSide(
-          color: isDark ? DriverColors.borderDark : DriverColors.border,
+        borderSide: const BorderSide(
+          color: DriverColors.border,
+          width: 1.2,
         ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(DriverDimensions.radiusMedium),
         borderSide: const BorderSide(
-          color: DriverColors.primary,
-          width: 1.5,
+          color: DriverColors.navy,
+          width: 2.0,
         ),
       ),
     );
@@ -234,34 +237,34 @@ class DriverDecorations {
 /// Typography and text styles for the Driver UI
 class DriverTextStyles {
   static const TextStyle pageTitle = TextStyle(
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: FontWeight.w900,
     color: DriverColors.textHeading,
     letterSpacing: -0.2,
   );
 
   static const TextStyle sectionHeader = TextStyle(
-    fontSize: 16,
+    fontSize: 16.5,
     fontWeight: FontWeight.w800,
     color: DriverColors.textHeading,
   );
 
   static const TextStyle cardTitle = TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.w700,
+    fontSize: 15,
+    fontWeight: FontWeight.w800,
     color: DriverColors.textHeading,
   );
 
   static const TextStyle statValue = TextStyle(
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: FontWeight.w900,
     color: DriverColors.textMain,
   );
 
   static const TextStyle statLabel = TextStyle(
     color: DriverColors.textMuted,
-    fontSize: 12,
-    fontWeight: FontWeight.bold,
+    fontSize: 13,
+    fontWeight: FontWeight.w700,
   );
 
   static const TextStyle dutyStatusTitle = TextStyle(
@@ -272,7 +275,7 @@ class DriverTextStyles {
 
   static const TextStyle dutyStatusSubtitle = TextStyle(
     color: Colors.white70,
-    fontSize: 12,
+    fontSize: 12.5,
   );
 
   static const TextStyle earningHighlight = TextStyle(
@@ -282,8 +285,8 @@ class DriverTextStyles {
   );
 
   static const TextStyle badge = TextStyle(
-    fontSize: 11,
-    fontWeight: FontWeight.bold,
+    fontSize: 11.5,
+    fontWeight: FontWeight.w800,
   );
 }
 
@@ -362,16 +365,15 @@ class DriverStatCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   value,
-                  style: DriverTextStyles.statValue.copyWith(
-                    color: isDark ? Colors.white : DriverColors.textMain,
-                  ),
+                  style: DriverTextStyles.statValue,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: TextStyle(
-                    color: isDark ? Colors.grey.shade400 : DriverColors.textSubtle,
-                    fontSize: 11,
+                  style: const TextStyle(
+                    color: DriverColors.textSubtle,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -380,8 +382,11 @@ class DriverStatCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
+              color: color.withValues(alpha: 0.12),
               shape: BoxShape.circle,
+              border: Border.all(
+                color: color.withValues(alpha: 0.25),
+              ),
             ),
             child: Icon(icon, color: color, size: 28),
           ),

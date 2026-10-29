@@ -26,13 +26,7 @@ class AppRoutes {
       case driverDashboard:
         return MaterialPageRoute(builder: (_) => const DriverDashboard());
       case adminDashboard:
-        return MaterialPageRoute(
-          builder: (_) => const Scaffold(
-            body: Center(
-              child: Text('Admin access is available via the Admin Panel.'),
-            ),
-          ),
-        );
+        return MaterialPageRoute(builder: (_) => const LoginScreen());
       default:
         return MaterialPageRoute(
           builder: (_) => Scaffold(

@@ -13,6 +13,11 @@ abstract class AuthRepository {
   });
   Future<void> logout();
   Future<UserModel?> getCurrentUser();
+  Future<UserModel> updateProfile({
+    required UserModel currentUser,
+    required String name,
+    required String phone,
+  });
 }
 
 class MockAuthRepository implements AuthRepository {
@@ -93,6 +98,26 @@ class MockAuthRepository implements AuthRepository {
   Future<UserModel?> getCurrentUser() async {
     return null;
   }
+
+  @override
+  Future<UserModel> updateProfile({
+    required UserModel currentUser,
+    required String name,
+    required String phone,
+  }) async {
+    final updated = UserModel(
+      id: currentUser.id,
+      name: name,
+      email: currentUser.email,
+      role: currentUser.role,
+    );
+    final normalizedEmail = currentUser.email.trim().toLowerCase();
+    if (_userStore.containsKey(normalizedEmail)) {
+      _userStore[normalizedEmail]!['user'] = updated;
+      _userStore[normalizedEmail]!['phone'] = phone;
+    }
+    return updated;
+  }
 }
 
 class SupabaseAuthRepository implements AuthRepository {
@@ -113,6 +138,8 @@ class SupabaseAuthRepository implements AuthRepository {
       throw Exception('Login failed: User record is empty.');
     }
 
+    final metaName = user.userMetadata?['name'] as String?;
+
     try {
       // Query profiles table for user details
       final profile = await _client
@@ -120,12 +147,20 @@ class SupabaseAuthRepository implements AuthRepository {
           .select()
           .eq('id', user.id)
           .single();
-      return UserModel.fromJson(profile);
+      final model = UserModel.fromJson(profile);
+      return UserModel(
+        id: model.id,
+        name: (metaName != null && metaName.isNotEmpty) ? metaName : model.name,
+        email: model.email,
+        role: model.role,
+      );
     } catch (e) {
       // Fallback if profiles table is not yet migrated
       return UserModel(
         id: user.id,
-        name: email.split('@').first,
+        name: (metaName != null && metaName.isNotEmpty)
+            ? metaName
+            : email.split('@').first,
         email: email,
         role: UserRole.customer,
       );
@@ -179,18 +214,30 @@ class SupabaseAuthRepository implements AuthRepository {
       final user = _client.auth.currentUser;
       if (user == null) return null;
 
+      final metaName = user.userMetadata?['name'] as String?;
+
       try {
         final profile = await _client
             .from('profiles')
             .select()
             .eq('id', user.id)
             .single();
-        return UserModel.fromJson(profile);
+        final model = UserModel.fromJson(profile);
+        return UserModel(
+          id: model.id,
+          name: (metaName != null && metaName.isNotEmpty)
+              ? metaName
+              : model.name,
+          email: model.email,
+          role: model.role,
+        );
       } catch (e) {
         final email = user.email ?? '';
         return UserModel(
           id: user.id,
-          name: email.split('@').first,
+          name: (metaName != null && metaName.isNotEmpty)
+              ? metaName
+              : email.split('@').first,
           email: email,
           role: UserRole.customer,
         );
@@ -198,5 +245,35 @@ class SupabaseAuthRepository implements AuthRepository {
     } catch (e) {
       return null;
     }
+  }
+
+  @override
+  Future<UserModel> updateProfile({
+    required UserModel currentUser,
+    required String name,
+    required String phone,
+  }) async {
+    final updated = UserModel(
+      id: currentUser.id,
+      name: name,
+      email: currentUser.email,
+      role: currentUser.role,
+    );
+    try {
+      await _client.auth.updateUser(
+        UserAttributes(data: {'name': name, 'phone': phone}),
+      );
+    } catch (e) {
+      debugPrint('Supabase auth metadata update skipped: $e');
+    }
+    try {
+      await _client
+          .from('profiles')
+          .update({'name': name})
+          .eq('id', currentUser.id);
+    } catch (e) {
+      debugPrint('Supabase profiles table update skipped: $e');
+    }
+    return updated;
   }
 }

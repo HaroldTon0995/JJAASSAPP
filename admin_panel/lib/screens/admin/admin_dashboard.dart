@@ -563,36 +563,72 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final isWide = media.size.width >= 1100;
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    const isDark = false;
 
     final orderProvider = Provider.of<OrderProvider>(context);
     _syncRealtimeNotifications(orderProvider.orders);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+      backgroundColor: AppTheme.lightBg,
       drawer: (!isWide)
-          ? Drawer(child: _buildSidebar(isDark, isDrawer: true))
+          ? Drawer(
+              backgroundColor: Colors.white,
+              child: _buildSidebar(isDark, isDrawer: true),
+            )
           : null,
       appBar: isWide
           ? null
           : AppBar(
-              backgroundColor: Colors.white,
-              title: Text(
-                _getTabTitle(),
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 18,
-                ),
+              backgroundColor: AppTheme.navyColor,
+              foregroundColor: Colors.white,
+              elevation: 2,
+              titleSpacing: 8,
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const WaterDropletLogo(size: 28),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _getTabTitle(),
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const Text(
+                          'JJAASS Water Market • Admin',
+                          style: TextStyle(
+                            color: Color(0xFFBFDBFE),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.sync_rounded),
+                  icon: const Icon(Icons.sync_rounded, color: Colors.white),
                   tooltip: 'Sync Console',
                   onPressed: _loadAllDashboardData,
                 ),
                 IconButton(
-                  icon: const Icon(Icons.logout_rounded),
+                  icon: const Icon(Icons.logout_rounded, color: Colors.white),
                   tooltip: 'Log Out',
                   onPressed: _handleLogout,
                 ),
@@ -603,7 +639,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
           if (isWide) _buildSidebar(isDark),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppTheme.navyColor,
+                    ),
+                  )
                 : Column(
                     children: [
                       if (isWide) _buildDesktopHeader(isDark),
@@ -633,12 +673,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
         : 'A';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 14.0),
+      decoration: const BoxDecoration(
+        color: Colors.white,
         border: Border(
           bottom: BorderSide(
-            color: isDark ? Colors.white10 : const Color(0xFFD0E7EB),
+            color: Color(0xFFCBD5E1),
             width: 1.0,
           ),
         ),
@@ -650,24 +690,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
             children: [
               Text(
                 _getTabTitle(),
-                style: TextStyle(
-                  fontSize: 20,
+                style: const TextStyle(
+                  fontSize: 21,
                   fontWeight: FontWeight.w900,
-                  color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  color: AppTheme.navyColor,
                 ),
               ),
               Row(
                 children: [
                   const Text(
                     'Welcome back, ',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.mutedText,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   Text(
                     '$adminName!',
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: 13,
                       color: AppTheme.primaryColor,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ],
@@ -679,22 +723,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
             width: 300,
             height: 40,
             decoration: BoxDecoration(
-              color: isDark ? Colors.black26 : const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(8),
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFCBD5E1)),
             ),
             child: TextField(
-              decoration: InputDecoration(
+              style: const TextStyle(
+                color: AppTheme.navyColor,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+              ),
+              decoration: const InputDecoration(
                 hintText: 'Search anything...',
-                hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                hintStyle: TextStyle(color: Color(0xFF64748B), fontSize: 13),
                 prefixIcon: Icon(
                   Icons.search_rounded,
-                  color: Colors.grey.shade400,
-                  size: 18,
+                  color: AppTheme.primaryColor,
+                  size: 19,
                 ),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                contentPadding: const EdgeInsets.only(bottom: 8),
+                contentPadding: EdgeInsets.only(bottom: 8),
               ),
             ),
           ),
@@ -712,21 +762,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
           Container(
             height: 32,
             width: 1,
-            color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+            color: const Color(0xFFCBD5E1),
           ),
           const SizedBox(width: 24),
           Row(
             children: [
               CircleAvatar(
-                radius: 18,
-                backgroundColor: AppTheme.primaryColor.withValues(
-                  alpha: 0.12,
-                ),
+                radius: 19,
+                backgroundColor: AppTheme.navyColor,
                 child: Text(
                   adminInitial,
                   style: const TextStyle(
-                    color: AppTheme.primaryColor,
-                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
@@ -737,15 +785,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 children: [
                   Text(
                     adminName,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      color: isDark ? Colors.white : const Color(0xFF1E293B),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13.5,
+                      color: AppTheme.navyColor,
                     ),
                   ),
                   const Text(
                     'Administrator',
-                    style: TextStyle(color: Colors.grey, fontSize: 10),
+                    style: TextStyle(
+                      color: AppTheme.mutedText,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -779,7 +831,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
             child: Icon(
               Icons.notifications_none_rounded,
-              color: isDark ? Colors.grey.shade400 : const Color(0xFF64748B),
+              color: isDark ? const Color(0xFF64748B) : const Color(0xFF64748B),
               size: 20,
             ),
           ),
@@ -916,7 +968,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               Text(
                                 n['time'] as String,
                                 style: TextStyle(
-                                  color: Colors.grey.shade400,
+                                  color: const Color(0xFF64748B),
                                   fontSize: 8,
                                 ),
                               ),
@@ -974,7 +1026,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
             child: Icon(
               Icons.chat_bubble_outline_rounded,
-              color: isDark ? Colors.grey.shade400 : const Color(0xFF64748B),
+              color: isDark ? const Color(0xFF64748B) : const Color(0xFF64748B),
               size: 20,
             ),
           ),
@@ -1100,7 +1152,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               Text(
                                 m['time'] as String,
                                 style: TextStyle(
-                                  color: Colors.grey.shade400,
+                                  color: const Color(0xFF64748B),
                                   fontSize: 8,
                                 ),
                               ),
@@ -1181,48 +1233,63 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return Container(
       width: 260,
       height: double.infinity,
-      color: Colors.white,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          right: BorderSide(color: Color(0xFFCBD5E1), width: 1),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
+          Container(
+            width: double.infinity,
             padding: const EdgeInsets.only(
-              left: 24,
+              left: 20,
               top: 24,
-              right: 24,
-              bottom: 16,
+              right: 20,
+              bottom: 18,
+            ),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF8FAFC),
+              border: Border(
+                bottom: BorderSide(color: Color(0xFFE2E8F0)),
+              ),
             ),
             child: Row(
               children: [
-                const WaterDropletLogo(size: 36),
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppTheme.secondaryColor.withValues(alpha: 0.4),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: const WaterDropletLogo(size: 40),
+                ),
                 const SizedBox(width: 12),
-                Column(
+                const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text(
                       'JJAASS',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 20,
                         fontWeight: FontWeight.w900,
+                        color: AppTheme.navyColor,
+                        letterSpacing: 1.4,
+                      ),
+                    ),
+                    Text(
+                      'WATER MARKET',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
                         color: AppTheme.primaryColor,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    Text(
-                      'Water Market',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    Text(
-                      'WATER REFILLING STATION',
-                      style: TextStyle(
-                        fontSize: 6,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
-                        color: Colors.grey,
+                        letterSpacing: 1.6,
                       ),
                     ),
                   ],
@@ -1230,7 +1297,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ],
             ),
           ),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
           const SizedBox(height: 12),
           Expanded(
             child: ListView.builder(
@@ -1261,36 +1327,34 @@ class _AdminDashboardState extends State<AdminDashboard> {
               width: double.infinity,
               padding: const EdgeInsets.all(14.0),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Colors.white, Colors.white],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                color: const Color(0xFFEFF6FF),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2F0F3), width: 1),
+                border: Border.all(
+                  color: AppTheme.secondaryColor.withValues(alpha: 0.35),
+                  width: 1,
+                ),
               ),
-              child: Column(
+              child: const Column(
                 children: [
-                  const WaterJugIllustration(width: 70, height: 80),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Pure Water,\nBetter Life!',
+                  WaterJugIllustration(width: 68, height: 76),
+                  SizedBox(height: 8),
+                  Text(
+                    'Fresh & Pure Water',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 13.5,
                       fontWeight: FontWeight.w900,
-                      color: AppTheme.primaryColor,
-                      height: 1.2,
+                      color: AppTheme.navyColor,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  SizedBox(height: 3),
                   Text(
-                    'Thank you for choosing JJAASSApp.',
+                    'Admin Management Console',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 9,
-                      color: Colors.grey.shade600,
-                      height: 1.3,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.mutedText,
                     ),
                   ),
                 ],
@@ -1301,7 +1365,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             icon: Icons.logout_rounded,
             title: 'Log Out',
             isSelected: false,
-            textColor: const Color(0xFFEF4444),
+            textColor: const Color(0xFFDC2626),
             onTap: _handleLogout,
           ),
           const SizedBox(height: 8),
@@ -1812,7 +1876,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     fontSize: 11,
                     color: isSelected
                         ? AppTheme.primaryColor
-                        : (isDark ? Colors.white38 : Colors.grey.shade400),
+                        : (isDark ? Colors.white38 : const Color(0xFF64748B)),
                     fontWeight: isSelected
                         ? FontWeight.bold
                         : FontWeight.normal,
@@ -1963,7 +2027,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             Text(
                               order.createdAt.toString().split(' ')[0],
                               style: TextStyle(
-                                color: isDark ? const Color(0xFF64748B) : Colors.grey.shade500,
+                                color: isDark ? const Color(0xFF64748B) : const Color(0xFF475569),
                                 fontSize: 9,
                               ),
                             ),
@@ -2438,7 +2502,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     style: const TextStyle(fontSize: 12),
                     decoration: InputDecoration(
                       hintText: 'Type your message...',
-                      hintStyle: TextStyle(color: Colors.grey.shade400),
+                      hintStyle: TextStyle(color: const Color(0xFF64748B)),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
@@ -2534,7 +2598,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: Colors.grey.shade500,
+                          color: const Color(0xFF475569),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -2653,7 +2717,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: Colors.grey.shade500,
+                          color: const Color(0xFF475569),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -3626,7 +3690,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           Icon(
                             Icons.local_shipping_outlined,
                             size: 48,
-                            color: Colors.grey.shade400,
+                            color: const Color(0xFF64748B),
                           ),
                           const SizedBox(height: 12),
                           Text(
@@ -4296,13 +4360,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         Icon(
                           Icons.search_off_rounded,
                           size: 48,
-                          color: Colors.grey.shade400,
+                          color: const Color(0xFF64748B),
                         ),
                         const SizedBox(height: 12),
                         Text(
                           'No users found matching your filter.',
                           style: TextStyle(
-                            color: Colors.grey.shade500,
+                            color: const Color(0xFF475569),
                             fontSize: 14,
                           ),
                         ),
@@ -4591,7 +4655,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: Colors.grey.shade500,
+                          color: const Color(0xFF475569),
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -4748,7 +4812,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: Colors.grey.shade500,
+                          color: const Color(0xFF475569),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -4928,7 +4992,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade500,
+                      color: const Color(0xFF475569),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -5181,7 +5245,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Icon(
                     Icons.inventory_2_outlined,
                     size: 48,
-                    color: Colors.grey.shade400,
+                    color: const Color(0xFF64748B),
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -5491,7 +5555,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final cardBg = isDark ? AppTheme.darkSurface : Colors.white;
     final borderColor = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
     final titleColor = isDark ? Colors.white : const Color(0xFF0F172A);
-    final subtextColor = isDark ? Colors.grey.shade400 : const Color(0xFF64748B);
+    final subtextColor = isDark ? const Color(0xFF64748B) : const Color(0xFF64748B);
 
     return Padding(
       padding: const EdgeInsets.all(24.0),
@@ -5698,7 +5762,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     style: TextStyle(fontSize: 12, color: titleColor),
                     decoration: InputDecoration(
                       hintText: 'Search by Txn Ref, Order #, or Customer...',
-                      hintStyle: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                      hintStyle: TextStyle(fontSize: 12, color: const Color(0xFF64748B)),
                       prefixIcon: const Icon(Icons.search, size: 18),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 10),
@@ -5747,7 +5811,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey.shade400),
+                        Icon(Icons.receipt_long_outlined, size: 48, color: const Color(0xFF64748B)),
                         const SizedBox(height: 12),
                         Text(
                           'No payment transactions match this filter.',
@@ -6195,7 +6259,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     Text(
                       'Viewing income generated for $reportFormattedDate',
                       style: TextStyle(
-                        color: Colors.grey.shade500,
+                        color: const Color(0xFF475569),
                         fontSize: 12,
                       ),
                     ),
@@ -6254,7 +6318,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             color: isSel
                                 ? Colors.white
                                 : (isDark
-                                      ? Colors.grey.shade400
+                                      ? const Color(0xFF64748B)
                                       : Colors.grey.shade700),
                             fontWeight: isSel
                                 ? FontWeight.bold
@@ -6637,7 +6701,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Text(
                   title,
                   style: TextStyle(
-                    color: Colors.grey.shade500,
+                    color: const Color(0xFF475569),
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                   ),
@@ -6874,12 +6938,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         Icon(
                           Icons.people_outline,
                           size: 48,
-                          color: Colors.grey.shade500,
+                          color: const Color(0xFF475569),
                         ),
                         const SizedBox(height: 12),
                         Text(
                           'No accounts match your criteria',
-                          style: TextStyle(color: Colors.grey.shade500),
+                          style: TextStyle(color: const Color(0xFF475569)),
                         ),
                       ],
                     ),
@@ -6926,7 +6990,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           subtitle: Text(
                             user.email,
                             style: TextStyle(
-                              color: Colors.grey.shade500,
+                              color: const Color(0xFF475569),
                               fontSize: 12,
                             ),
                           ),
@@ -7151,7 +7215,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         Text(
           label,
           style: TextStyle(
-            color: Colors.grey.shade500,
+            color: const Color(0xFF475569),
             fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
@@ -7202,17 +7266,17 @@ class _SidebarItemTileState extends State<_SidebarItemTile> {
     final bool highlighted = active || _isHovered;
 
     Color backgroundColor;
+    Color contentColor;
     if (active) {
-      backgroundColor = AppTheme.primaryColor;
+      backgroundColor = AppTheme.navyColor;
+      contentColor = Colors.white;
     } else if (_isHovered) {
-      backgroundColor = const Color(0xFF334155); // Dark Gray hover
+      backgroundColor = const Color(0xFFEFF6FF);
+      contentColor = widget.textColor ?? AppTheme.navyColor;
     } else {
       backgroundColor = Colors.transparent;
+      contentColor = widget.textColor ?? const Color(0xFF334155);
     }
-
-    final Color contentColor = highlighted
-        ? Colors.white
-        : (widget.textColor ?? const Color(0xFF475569));
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),

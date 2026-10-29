@@ -21,7 +21,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  UserRole _selectedRole = UserRole.customer;
 
   @override
   void dispose() {
@@ -39,14 +38,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
       name: _nameController.text.trim(),
       email: _emailController.text.trim(),
       password: _passwordController.text,
-      role: _selectedRole,
+      role: UserRole.customer,
     );
 
     if (!mounted) return;
 
     if (success) {
-      Helpers.showSnackBar(context, 'Account created successfully! Welcome to JJAASSApp.');
-      _routeToDashboard(_selectedRole);
+      Helpers.showSnackBar(
+        context,
+        'Account created successfully! Welcome to JJAASS Water Market.',
+      );
+      _routeToDashboard(UserRole.customer);
     } else {
       Helpers.showSnackBar(
         context,
@@ -59,23 +61,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _routeToDashboard(UserRole role) {
     switch (role) {
       case UserRole.customer:
-        Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.customerDashboard, (route) => false);
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          AppRoutes.customerDashboard,
+          (route) => false,
+        );
         break;
       case UserRole.driver:
-        Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.driverDashboard, (route) => false);
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          AppRoutes.driverDashboard,
+          (route) => false,
+        );
         break;
       case UserRole.admin:
-        Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.adminDashboard, (route) => false);
+        Helpers.showSnackBar(
+          context,
+          'Admin accounts are restricted to the Web Admin Panel.',
+          isError: true,
+        );
         break;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
     final isDesktop = size.width >= 700;
-    final isDark = theme.brightness == Brightness.dark;
 
     Widget formContent() {
       return Form(
@@ -84,86 +94,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // App logo / header icon
             Center(
               child: Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                  color: const Color(0xFFEFF6FF),
                   shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppTheme.secondaryColor.withValues(alpha: 0.4),
+                    width: 2,
+                  ),
                 ),
-                child: const WaterDropletLogo(size: 50),
+                child: const WaterDropletLogo(size: 62),
               ),
             ),
-            const SizedBox(height: 12),
-            Center(
+            const SizedBox(height: 14),
+            const Center(
               child: Text(
-                'Create Account',
-                style: theme.textTheme.headlineSmall?.copyWith(
+                'Create Customer Account',
+                style: TextStyle(
+                  fontSize: 24,
                   fontWeight: FontWeight.w900,
-                  color: AppTheme.primaryColor,
+                  color: AppTheme.navyColor,
+                  letterSpacing: 0.4,
                 ),
               ),
             ),
             const SizedBox(height: 4),
-            Center(
+            const Center(
               child: Text(
-                'Join JJAASSApp today',
+                'Join JJAASS Water Market today',
                 style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade500,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primaryColor,
                 ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Role Selector Toggle
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.grey.shade900 : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: UserRole.values.map((role) {
-                  final isSelected = _selectedRole == role;
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedRole = role;
-                        });
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: isSelected ? AppTheme.primaryColor : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: AppTheme.primaryColor.withValues(alpha: 0.2),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
-                                  )
-                                ]
-                              : null,
-                        ),
-                        child: Center(
-                          child: Text(
-                            Helpers.capitalize(role.name),
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : (isDark ? Colors.grey.shade400 : Colors.grey.shade700),
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
               ),
             ),
             const SizedBox(height: 24),
@@ -171,7 +136,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             CustomTextField(
               controller: _nameController,
               labelText: 'Full Name',
-              hintText: 'Enter your name',
+              hintText: 'Enter your full name',
               prefixIcon: Icons.person_outline_rounded,
               validator: (value) {
                 if (value == null || value.isEmpty) {
@@ -184,7 +149,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             CustomTextField(
               controller: _emailController,
               labelText: 'Email Address',
-              hintText: 'Enter your email',
+              hintText: 'Enter your email address',
               prefixIcon: Icons.email_outlined,
               keyboardType: TextInputType.emailAddress,
               validator: (value) {
@@ -201,7 +166,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             CustomTextField(
               controller: _passwordController,
               labelText: 'Password',
-              hintText: 'Enter password (6+ chars)',
+              hintText: 'Enter password (6+ characters)',
               prefixIcon: Icons.lock_outlined,
               isPassword: true,
               validator: (value) {
@@ -214,43 +179,50 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 return null;
               },
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 26),
             Consumer<AuthProvider>(
               builder: (context, auth, _) {
                 return CustomButton(
-                  text: 'Sign Up',
+                  text: 'Create Account',
                   isLoading: auth.isLoading,
                   onPressed: _handleRegister,
                   gradientColors: const [
+                    AppTheme.navyColor,
                     AppTheme.primaryColor,
-                    AppTheme.secondaryColor,
                   ],
                 );
               },
             ),
             const SizedBox(height: 20),
-            Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(
-                  "Already have an account? ",
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text(
-                    'Sign In',
+            Center(
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text(
+                    'Already have an account? ',
                     style: TextStyle(
-                      color: AppTheme.primaryColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      color: AppTheme.mutedText,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                ),
-              ],
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text(
+                      'Sign In',
+                      style: TextStyle(
+                        color: AppTheme.navyColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -258,10 +230,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     return Scaffold(
+      backgroundColor: AppTheme.lightBg,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: AppTheme.navyColor,
+          ),
           onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Back to Sign In',
+          style: TextStyle(
+            color: AppTheme.navyColor,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -269,32 +253,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
       body: WaveBackground(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
-            child: isDesktop
-                ? Container(
-                    width: 480,
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppTheme.darkSurface : Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
-                        width: 1.0,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.04),
-                          blurRadius: 24,
-                          offset: const Offset(0, 12),
-                        )
-                      ],
-                    ),
-                    child: formContent(),
-                  )
-                : Container(
-                    constraints: const BoxConstraints(maxWidth: 480),
-                    child: formContent(),
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+            child: Container(
+              width: isDesktop ? 480 : double.infinity,
+              constraints: const BoxConstraints(maxWidth: 480),
+              padding: EdgeInsets.symmetric(
+                horizontal: isDesktop ? 40 : 24,
+                vertical: isDesktop ? 36 : 28,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppTheme.borderColor,
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.navyColor.withValues(alpha: 0.08),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
                   ),
+                ],
+              ),
+              child: formContent(),
+            ),
           ),
         ),
       ),

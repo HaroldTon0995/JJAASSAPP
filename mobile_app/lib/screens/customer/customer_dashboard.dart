@@ -35,7 +35,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   int _activeSidebarMenu = 0;
 
   // Order Water Form States
-  String _selectedWaterType = '19L Purified Water';
+  String _selectedWaterType = '19LPurified Water';
+  String _selectedJugType = '5-Gallon Slim';
   int _orderQuantity = 2;
   String? _selectedProvince;
   String? _selectedCityCode;
@@ -60,16 +61,27 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   final ScrollController _chatScrollController = ScrollController();
   bool _isChatLoading = false;
 
-  // Settings profile fields
+  // Settings profile fields (persisted across rebuilds and sessions until changed again)
+  static String _savedProfileName = '';
+  static String _savedProfilePhone = '+63 912 345 6789';
   late TextEditingController _profileNameController;
   late TextEditingController _profilePhoneController;
-  bool _notificationsEnabled = true;
 
   @override
   void initState() {
     super.initState();
-    _profileNameController = TextEditingController(text: 'Customer User');
-    _profilePhoneController = TextEditingController(text: '+63 912 345 6789');
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final initialName = auth.currentUser?.name.isNotEmpty == true
+        ? auth.currentUser!.name
+        : (_savedProfileName.isNotEmpty ? _savedProfileName : 'Customer User');
+    final initialPhone = _savedProfilePhone.isNotEmpty
+        ? _savedProfilePhone
+        : auth.currentPhone;
+    _savedProfileName = initialName;
+    _savedProfilePhone = initialPhone;
+
+    _profileNameController = TextEditingController(text: initialName);
+    _profilePhoneController = TextEditingController(text: initialPhone);
 
     // Initialize selected water type dynamically from OrderProvider catalog
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -130,14 +142,18 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         );
     return InputDecoration(
       hintText: hint,
+      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13.5),
       labelText: label,
-      labelStyle: const TextStyle(color: Color(0xFF475569)),
+      labelStyle: const TextStyle(
+        color: AppTheme.navyColor,
+        fontWeight: FontWeight.w600,
+      ),
       filled: true,
-      fillColor: Colors.transparent,
+      fillColor: const Color(0xFFF8FAFC),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: border(const Color(0xFFCBD5E1)),
       enabledBorder: border(const Color(0xFFCBD5E1)),
-      focusedBorder: border(AppTheme.primaryColor, 2),
+      focusedBorder: border(AppTheme.navyColor, 2),
     );
   }
 
@@ -197,7 +213,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   }
 
   String _composeAddress() {
-    final cityName = _cities.firstWhere((c) => c.code == _selectedCityCode).name;
+    final cityName = _cities
+        .firstWhere((c) => c.code == _selectedCityCode)
+        .name;
     final barangayName = _barangays
         .firstWhere((b) => b.code == _selectedBarangayCode)
         .name;
@@ -205,13 +223,28 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         '$cityName, $_selectedProvince';
   }
 
+  void _resetOrderForm(OrderProvider orderProvider) {
+    _selectedWaterType = orderProvider.waterProducts.isNotEmpty
+        ? orderProvider.waterProducts.first['name'] as String
+        : '19L Purified Water';
+    _selectedJugType = '5-Gallon Slim';
+    _orderQuantity = 1;
+    _selectedProvince = null;
+    _selectedCityCode = null;
+    _selectedBarangayCode = null;
+    _cities = [];
+    _barangays = [];
+    _loadingCities = false;
+    _loadingBarangays = false;
+    _orderAddressController.clear();
+    _deliveryNoteController.clear();
+    _pinnedLocation = null;
+    _selectedPaymentMethod = 'Cash on Delivery';
+  }
+
   void _submitWaterOrder() async {
     if (_selectedProvince == null) {
-      Helpers.showSnackBar(
-        context,
-        'Please select a province.',
-        isError: true,
-      );
+      Helpers.showSnackBar(context, 'Please select a province.', isError: true);
       return;
     }
     if (_selectedCityCode == null) {
@@ -223,11 +256,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       return;
     }
     if (_selectedBarangayCode == null) {
-      Helpers.showSnackBar(
-        context,
-        'Please select a barangay.',
-        isError: true,
-      );
+      Helpers.showSnackBar(context, 'Please select a barangay.', isError: true);
       return;
     }
     if (_orderAddressController.text.trim().isEmpty) {
@@ -249,18 +278,24 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     );
     final pricePerJug = match['price'] as double;
     final waterTypeName = match['name'] as String;
+    final submittedPaymentMethod = _selectedPaymentMethod;
+
+    final customerName = _savedProfileName.isNotEmpty
+        ? _savedProfileName
+        : (user?.name ?? 'Customer');
+    final customerPhone = _savedProfilePhone.isNotEmpty
+        ? _savedProfilePhone
+        : '+63 912 345 6789';
 
     final newOrder = await orderProvider.placeOrder(
       customerId: user?.id ?? '',
-      customerName: user?.name ?? 'Customer',
-      customerPhone: _profilePhoneController.text.isNotEmpty
-          ? _profilePhoneController.text
-          : '+63 912 345 6789',
+      customerName: customerName,
+      customerPhone: customerPhone,
       deliveryAddress: _composeAddress(),
-      waterType: waterTypeName,
+      waterType: '$waterTypeName ($_selectedJugType)',
       quantity: _orderQuantity,
       pricePerUnit: pricePerJug,
-      paymentMethod: _selectedPaymentMethod,
+      paymentMethod: submittedPaymentMethod,
       deliveryNote: _deliveryNoteController.text.trim(),
       latitude: _pinnedLocation?.latitude,
       longitude: _pinnedLocation?.longitude,
@@ -272,11 +307,12 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         'Order ${newOrder.id} placed successfully!',
       );
       setState(() {
+        _resetOrderForm(orderProvider);
         _selectedTab = 2; // Route directly to My Deliveries
         _activeSidebarMenu = 2;
       });
 
-      if (_selectedPaymentMethod == 'GCash') {
+      if (submittedPaymentMethod == 'GCash') {
         _showGcashPaymentDialog(
           newOrder,
           Theme.of(context).brightness == Brightness.dark,
@@ -301,6 +337,240 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         }
       },
     );
+  }
+
+  Future<void> _showCancelOrderDialog(OrderModel order) async {
+    final reasons = <String>[
+      'Pinned wrong location on map',
+      'Entered wrong delivery address',
+      'Want to change water/jug type or quantity',
+      'Changed my mind',
+    ];
+    String selectedReason = reasons.first;
+
+    final action = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEE2E2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.cancel_outlined,
+                      color: Color(0xFFDC2626),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Cancel Order ${order.id}?',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.navyColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            order.itemsSummary,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13.5,
+                              color: AppTheme.navyColor,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            order.deliveryAddress,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Select a reason for cancelling:',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.navyColor,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...reasons.map((reason) {
+                      final isSelected = selectedReason == reason;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: InkWell(
+                          onTap: () {
+                            setDialogState(() {
+                              selectedReason = reason;
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? const Color(0xFFFEF2F2)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFFDC2626)
+                                    : const Color(0xFFCBD5E1),
+                                width: isSelected ? 1.6 : 1.0,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isSelected
+                                      ? Icons.radio_button_checked_rounded
+                                      : Icons.radio_button_off_rounded,
+                                  size: 18,
+                                  color: isSelected
+                                      ? const Color(0xFFDC2626)
+                                      : const Color(0xFF94A3B8),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    reason,
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w800
+                                          : FontWeight.w600,
+                                      color: const Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(null),
+                  child: const Text(
+                    'Keep Order',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                ),
+                OutlinedButton(
+                  onPressed: () => Navigator.of(dialogContext).pop('reorder'),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppTheme.primaryColor),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    'Cancel & Re-Order',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12.5,
+                      color: AppTheme.primaryColor,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(dialogContext).pop('cancel'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFDC2626),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    'Cancel Order',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12.5,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (action == null || !mounted) return;
+
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final success = await orderProvider.cancelCustomerOrder(
+      orderId: order.id,
+      reason: selectedReason,
+    );
+
+    if (!mounted) return;
+    if (success) {
+      Helpers.showSnackBar(
+        context,
+        'Order ${order.id} has been cancelled ($selectedReason).',
+      );
+      if (action == 'reorder') {
+        setState(() {
+          _selectedTab = 1; // Switch directly to Order Water tab
+          _activeSidebarMenu = 1;
+        });
+      }
+    } else {
+      Helpers.showSnackBar(
+        context,
+        'Could not cancel order ${order.id}. It may already be completed or cancelled.',
+        isError: true,
+      );
+    }
   }
 
   void _sendSupportMessage(String text) async {
@@ -384,32 +654,66 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final isWide = media.size.width >= 1100;
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    const isDark = false;
 
     return Scaffold(
+      backgroundColor: AppTheme.lightBg,
       drawer: (!isWide)
-          ? Drawer(child: _buildSidebar(isDark, isDrawer: true))
+          ? Drawer(
+              backgroundColor: Colors.white,
+              child: _buildSidebar(isDark, isDrawer: true),
+            )
           : null,
       appBar: isWide
           ? null
           : AppBar(
-              backgroundColor: Colors.white,
-              title: Text(
-                _getTabTitle(),
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 18,
-                ),
+              backgroundColor: AppTheme.navyColor,
+              foregroundColor: Colors.white,
+              elevation: 2,
+              titleSpacing: 8,
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const WaterDropletLogo(size: 28),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _getTabTitle(),
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const Text(
+                          'JJAASS Water Market',
+                          style: TextStyle(
+                            color: Color(0xFFBFDBFE),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.sync_rounded),
+                  tooltip: 'Refresh',
+                  icon: const Icon(Icons.sync_rounded, color: Colors.white),
                   onPressed: _loadDashboardData,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.logout_rounded),
-                  onPressed: _handleLogout,
                 ),
               ],
             ),
@@ -418,12 +722,15 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           if (isWide) _buildSidebar(isDark),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppTheme.navyColor),
+                  )
                 : Column(
                     children: [
                       if (isWide) _buildDesktopHeader(isDark),
                       Expanded(
                         child: RefreshIndicator(
+                          color: AppTheme.navyColor,
                           onRefresh: _loadDashboardData,
                           child: _buildSelectedTabContent(
                             isDark,
@@ -442,14 +749,11 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   Widget _buildDesktopHeader(bool isDark) {
     final auth = Provider.of<AuthProvider>(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 14.0),
+      decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
-          bottom: BorderSide(
-            color: isDark ? Colors.white10 : const Color(0xFFD0E7EB),
-            width: 1.0,
-          ),
+          bottom: BorderSide(color: Color(0xFFCBD5E1), width: 1.0),
         ),
       ),
       child: Row(
@@ -460,23 +764,27 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               Text(
                 _getTabTitle(),
                 style: const TextStyle(
-                  fontSize: 20,
+                  fontSize: 21,
                   fontWeight: FontWeight.w900,
-                  color: Color(0xFF1E293B),
+                  color: AppTheme.navyColor,
                 ),
               ),
               Row(
                 children: [
                   const Text(
                     'Welcome back, ',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.mutedText,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   Text(
                     '${auth.currentUser?.name ?? "Customer"}!',
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: 13,
                       color: AppTheme.primaryColor,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ],
@@ -488,17 +796,26 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             width: 300,
             height: 40,
             decoration: BoxDecoration(
-              color: isDark ? Colors.black26 : const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(8),
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFCBD5E1)),
             ),
             child: TextField(
+              style: const TextStyle(
+                color: AppTheme.navyColor,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+              ),
               decoration: InputDecoration(
                 hintText: 'Search orders, services...',
-                hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-                prefixIcon: Icon(
+                hintStyle: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 13,
+                ),
+                prefixIcon: const Icon(
                   Icons.search_rounded,
-                  color: Colors.grey.shade400,
-                  size: 18,
+                  color: AppTheme.primaryColor,
+                  size: 19,
                 ),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
@@ -507,38 +824,45 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               ),
             ),
           ),
-          const SizedBox(width: 24),
+          const SizedBox(width: 20),
           IconButton(
             onPressed: () {},
             icon: const Icon(
               Icons.notifications_none_rounded,
-              color: Color(0xFF64748B),
+              color: AppTheme.navyColor,
             ),
           ),
           IconButton(
-            onPressed: () {},
+            onPressed: () {
+              setState(() {
+                _selectedTab = 4;
+                _activeSidebarMenu = 4;
+              });
+            },
             icon: const Icon(
               Icons.chat_bubble_outline_rounded,
-              color: Color(0xFF64748B),
+              color: AppTheme.navyColor,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           InkWell(
             onTap: () {
               setState(() {
+                _profileNameController.text = _savedProfileName;
+                _profilePhoneController.text = _savedProfilePhone;
                 _selectedTab = 5;
                 _activeSidebarMenu = 5;
               });
             },
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(20),
             child: CircleAvatar(
-              radius: 18,
-              backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.12),
+              radius: 19,
+              backgroundColor: AppTheme.navyColor,
               child: Text(
                 (auth.currentUser?.name ?? 'C').substring(0, 1).toUpperCase(),
                 style: const TextStyle(
-                  color: AppTheme.primaryColor,
-                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
@@ -580,39 +904,59 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     return Container(
       width: 260,
       height: double.infinity,
-      color: Colors.white,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(right: BorderSide(color: Color(0xFFCBD5E1), width: 1)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
+          Container(
+            width: double.infinity,
             padding: const EdgeInsets.only(
-              left: 24,
+              left: 20,
               top: 24,
-              right: 24,
-              bottom: 16,
+              right: 20,
+              bottom: 18,
+            ),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF8FAFC),
+              border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
             ),
             child: Row(
               children: [
-                const WaterDropletLogo(size: 36),
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppTheme.secondaryColor.withValues(alpha: 0.4),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: const WaterDropletLogo(size: 40),
+                ),
                 const SizedBox(width: 12),
-                Column(
+                const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'JJAASS',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 20,
                         fontWeight: FontWeight.w900,
-                        color: AppTheme.primaryColor,
-                        letterSpacing: 0.5,
+                        color: AppTheme.navyColor,
+                        letterSpacing: 1.4,
                       ),
                     ),
                     Text(
-                      'Water Market',
+                      'WATER MARKET',
                       style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.primaryColor,
+                        letterSpacing: 1.6,
                       ),
                     ),
                   ],
@@ -620,7 +964,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               ],
             ),
           ),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
           const SizedBox(height: 12),
           Expanded(
             child: ListView.builder(
@@ -634,6 +977,10 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                   isSelected: isSelected,
                   onTap: () {
                     setState(() {
+                      if (index == 5) {
+                        _profileNameController.text = _savedProfileName;
+                        _profilePhoneController.text = _savedProfilePhone;
+                      }
                       _activeSidebarMenu = index;
                       _selectedTab = index;
                     });
@@ -651,30 +998,33 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               width: double.infinity,
               padding: const EdgeInsets.all(14.0),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Colors.white, Colors.white],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                color: const Color(0xFFEFF6FF),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2F0F3), width: 1),
+                border: Border.all(
+                  color: AppTheme.secondaryColor.withValues(alpha: 0.35),
+                  width: 1,
+                ),
               ),
-              child: Column(
+              child: const Column(
                 children: [
-                  const WaterJugIllustration(width: 70, height: 80),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Fresh & Pure',
+                  WaterJugIllustration(width: 68, height: 76),
+                  SizedBox(height: 8),
+                  Text(
+                    'Fresh & Pure Water',
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 13.5,
                       fontWeight: FontWeight.w900,
-                      color: AppTheme.primaryColor,
+                      color: AppTheme.navyColor,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 3),
                   Text(
                     'Stay hydrated, stay healthy.',
-                    style: TextStyle(fontSize: 9, color: Colors.grey.shade600),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.mutedText,
+                    ),
                   ),
                 ],
               ),
@@ -684,7 +1034,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             icon: Icons.logout_rounded,
             title: 'Log Out',
             isSelected: false,
-            textColor: const Color(0xFFEF4444),
+            textColor: const Color(0xFFDC2626),
             onTap: _handleLogout,
           ),
           const SizedBox(height: 8),
@@ -731,7 +1081,10 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
 
     final pendingGcashOrders = myOrders
         .where(
-          (o) => o.paymentStatus == 'Pending' && o.paymentMethod == 'GCash',
+          (o) =>
+              o.paymentStatus == 'Pending' &&
+              o.paymentMethod == 'GCash' &&
+              o.orderStatus != OrderStatus.cancelled,
         )
         .toList();
 
@@ -949,10 +1302,15 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                   itemCount: min(myOrders.length, 4),
                   itemBuilder: (context, index) {
                     final tx = myOrders[index];
+                    final isCancelled = tx.orderStatus == OrderStatus.cancelled;
+                    final canCancel =
+                        tx.orderStatus != OrderStatus.completed && !isCancelled;
                     final isCompleted =
                         tx.orderStatus == OrderStatus.completed ||
                         tx.paymentStatus == 'Paid';
-                    final color = isCompleted
+                    final color = isCancelled
+                        ? const Color(0xFFDC2626)
+                        : isCompleted
                         ? (isDark
                               ? const Color(0xFF38BDF8)
                               : const Color(0xFF0284C7))
@@ -987,7 +1345,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
-                                Icons.payment_rounded,
+                                isCancelled
+                                    ? Icons.cancel_rounded
+                                    : Icons.payment_rounded,
                                 color: color,
                                 size: 20,
                               ),
@@ -1053,7 +1413,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                     ),
                                   ),
                                   child: Text(
-                                    tx.paymentStatus,
+                                    isCancelled
+                                        ? 'Cancelled'
+                                        : tx.paymentStatus,
                                     style: TextStyle(
                                       color: color,
                                       fontSize: 10,
@@ -1061,6 +1423,34 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                     ),
                                   ),
                                 ),
+                                if (canCancel) ...[
+                                  const SizedBox(height: 6),
+                                  InkWell(
+                                    onTap: () => _showCancelOrderDialog(tx),
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFEF2F2),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: const Color(0xFFFECACA),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Cancel Order',
+                                        style: TextStyle(
+                                          color: Color(0xFFDC2626),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ],
@@ -1079,47 +1469,41 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       {
         'title': 'Order Water',
         'icon': Icons.local_drink_rounded,
-        'color': const Color(0xFF0284C7),
+        'color': AppTheme.navyColor,
         'tab': 1,
       },
       {
-        'title': 'Points Store',
-        'icon': Icons.stars_rounded,
-        'color': const Color(0xFF0284C7),
-        'tab': 4,
+        'title': 'Track Deliveries',
+        'icon': Icons.local_shipping_rounded,
+        'color': AppTheme.primaryColor,
+        'tab': 2,
       },
       {
         'title': 'Chat Support',
         'icon': Icons.support_agent_rounded,
-        'color': const Color(0xFF0EA5E9),
-        'tab': 5,
+        'color': AppTheme.accentColor,
+        'tab': 4,
       },
       {
         'title': 'Profile Settings',
         'icon': Icons.manage_accounts_rounded,
-        'color': const Color(0xFF10B981),
-        'tab': 6,
+        'color': const Color(0xFF059669),
+        'tab': 5,
       },
     ];
 
     return Container(
       padding: const EdgeInsets.all(20.0),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-        ),
-      ),
+      decoration: CustomerDecorations.card(isDark: isDark),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          const Text(
             'Quick Actions',
             style: TextStyle(
-              fontSize: 15,
+              fontSize: 16,
               fontWeight: FontWeight.w800,
-              color: isDark ? Colors.white : const Color(0xFF1E293B),
+              color: AppTheme.navyColor,
             ),
           ),
           const SizedBox(height: 14),
@@ -1129,12 +1513,13 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             itemCount: actions.length,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
               childAspectRatio: 1.4,
             ),
             itemBuilder: (context, index) {
               final act = actions[index];
+              final color = act['color'] as Color;
               return InkWell(
                 onTap: () {
                   setState(() {
@@ -1144,50 +1529,28 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 },
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                   decoration: BoxDecoration(
-                    color: (act['color'] as Color).withValues(
-                      alpha: isDark ? 0.15 : 0.06,
-                    ),
+                    color: color.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: (act['color'] as Color).withValues(
-                        alpha: isDark ? 0.35 : 0.1,
-                      ),
+                      color: color.withValues(alpha: 0.25),
+                      width: 1.2,
                     ),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        act['icon'] as IconData,
-                        color: act['color'] as Color,
-                        size: 22,
-                      ),
+                      Icon(act['icon'] as IconData, color: color, size: 24),
                       const SizedBox(height: 6),
-                      Builder(
-                        builder: (context) {
-                          final cardBg = isDark
-                              ? AppTheme.darkSurface
-                              : Colors.white;
-                          final tileBg = Color.alphaBlend(
-                            (act['color'] as Color).withValues(
-                              alpha: isDark ? 0.15 : 0.06,
-                            ),
-                            cardBg,
-                          );
-                          final textColor = tileBg.computeLuminance() > 0.5
-                              ? const Color(0xFF0F172A)
-                              : Colors.white;
-                          return Text(
-                            act['title'] as String,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: textColor,
-                            ),
-                          );
-                        },
+                      Text(
+                        act['title'] as String,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.navyColor,
+                        ),
                       ),
                     ],
                   ),
@@ -1203,30 +1566,24 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   Widget _buildMiniAiSupportCard(bool isDark) {
     return Container(
       padding: const EdgeInsets.all(20.0),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-        ),
-      ),
+      decoration: CustomerDecorations.card(isDark: isDark),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.psychology_rounded,
                 color: AppTheme.primaryColor,
-                size: 20,
+                size: 22,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Text(
                 'AI Chat Support',
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  color: AppTheme.navyColor,
                 ),
               ),
             ],
@@ -1236,48 +1593,45 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             width: double.infinity,
             padding: const EdgeInsets.all(12.0),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF0F172A) : Colors.white,
+              color: const Color(0xFFEFF6FF),
               borderRadius: const BorderRadius.only(
                 topRight: Radius.circular(12),
                 bottomLeft: Radius.circular(12),
                 bottomRight: Radius.circular(12),
               ),
               border: Border.all(
-                color: isDark
-                    ? const Color(0xFF334155)
-                    : const Color(0xFFE2F0F3),
+                color: AppTheme.secondaryColor.withValues(alpha: 0.35),
               ),
             ),
-            child: Row(
+            child: const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const CircleAvatar(
-                  radius: 12,
-                  backgroundColor: AppTheme.primaryColor,
-                  child: Icon(Icons.adb_rounded, size: 12, color: Colors.white),
+                CircleAvatar(
+                  radius: 13,
+                  backgroundColor: AppTheme.navyColor,
+                  child: Icon(Icons.adb_rounded, size: 13, color: Colors.white),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'AquaBot',
                         style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.navyColor,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: 2),
                       Text(
                         'Hello! I\'m AquaBot 💧 How can I help you today?',
                         style: TextStyle(
-                          fontSize: 11,
-                          color: isDark
-                              ? const Color(0xFFCBD5E1)
-                              : const Color(0xFF475569),
-                          height: 1.3,
+                          fontSize: 12.5,
+                          color: AppTheme.bodyText,
+                          fontWeight: FontWeight.w500,
+                          height: 1.35,
                         ),
                       ),
                     ],
@@ -1291,18 +1645,12 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
             children: [
               Expanded(
                 child: Container(
-                  height: 38,
+                  height: 40,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xFF0F172A)
-                        : const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isDark
-                          ? const Color(0xFF334155)
-                          : const Color(0xFFE2E8F0),
-                    ),
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
                   ),
                   child: TextField(
                     controller: _chatInputController,
@@ -1313,25 +1661,32 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                         _activeSidebarMenu = 4;
                       });
                     },
-                    style: const TextStyle(fontSize: 12),
-                    decoration: InputDecoration(
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.navyColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: const InputDecoration(
                       hintText: 'Type your message...',
-                      hintStyle: TextStyle(color: Colors.grey.shade400),
+                      hintStyle: TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 12.5,
+                      ),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
-                      contentPadding: const EdgeInsets.only(bottom: 12),
+                      contentPadding: EdgeInsets.only(bottom: 10),
                     ),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               Container(
-                width: 38,
-                height: 38,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor,
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppTheme.navyColor,
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: IconButton(
                   onPressed: () {
@@ -1343,7 +1698,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                   },
                   icon: const Icon(
                     Icons.send_rounded,
-                    size: 14,
+                    size: 16,
                     color: Colors.white,
                   ),
                 ),
@@ -1365,63 +1720,178 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         children: [
           const Text(
             'Place a Fresh Water Order',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w900,
+              color: AppTheme.navyColor,
+            ),
           ),
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.all(24.0),
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkSurface : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
-              ),
-            ),
+            decoration: CustomerDecorations.card(isDark: isDark),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Water Type Dropdown
+                // Water Type Selection (Cards with Water Drop Icon)
                 const Text(
-                  'Water Type Selection',
+                  'Select Water Type',
                   style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.navyColor,
                   ),
                 ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedWaterType,
-                  isExpanded: true,
-                  decoration: _boxedInputDecoration(),
-                  items: orderProvider.waterProducts.map((prod) {
+                const SizedBox(height: 10),
+                Column(
+                  children: orderProvider.waterProducts.map((prod) {
                     final name = prod['name'] as String;
                     final price = prod['price'] as double;
-                    return DropdownMenuItem<String>(
-                      value: name,
-                      child: Text(
-                        '$name (₱${price.toStringAsFixed(2)})',
-                        overflow: TextOverflow.ellipsis,
+                    final desc = (prod['description'] as String?) ?? '';
+                    final isSelected = _selectedWaterType == name;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            _selectedWaterType = name;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(14),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppTheme.primaryColor.withValues(alpha: 0.08)
+                                : const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppTheme.navyColor
+                                  : const Color(0xFFCBD5E1),
+                              width: isSelected ? 2.0 : 1.2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppTheme.navyColor
+                                      : AppTheme.primaryColor.withValues(
+                                          alpha: 0.12,
+                                        ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  Icons.water_drop_rounded,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : AppTheme.primaryColor,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppTheme.navyColor,
+                                      ),
+                                    ),
+                                    if (desc.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        desc,
+                                        style: const TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w500,
+                                          color: Color(0xFF475569),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '₱${price.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppTheme.navyColor,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(
+                                isSelected
+                                    ? Icons.check_circle_rounded
+                                    : Icons.radio_button_unchecked_rounded,
+                                color: isSelected
+                                    ? AppTheme.navyColor
+                                    : const Color(0xFF94A3B8),
+                                size: 22,
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     );
                   }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() {
-                        _selectedWaterType = val;
-                      });
-                    }
-                  },
+                ),
+                const SizedBox(height: 14),
+
+                // Jug Type Selection (2 Photos: Slim & Round)
+                const Text(
+                  'Select Jug Type',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.navyColor,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildJugTypeOptionCard(
+                        title: '5-Gallon Slim',
+                        subtitle: 'With Faucet & Handle',
+                        imageAsset: 'assets/images/slim_container.jpg',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildJugTypeOptionCard(
+                        title: '5-Gallon Round',
+                        subtitle: 'For Dispenser',
+                        imageAsset: 'assets/images/round_container.jpg',
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 20),
 
                 // Quantity Row
-                const Text(
-                  'Quantity (5-Gallon Slim/Round)',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
+                Text(
+                  'Quantity ($_selectedJugType)',
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.navyColor,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -1430,7 +1900,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                     IconButton(
                       icon: const Icon(
                         Icons.remove_circle_outline,
-                        color: AppTheme.primaryColor,
+                        color: AppTheme.navyColor,
                       ),
                       onPressed: () {
                         if (_orderQuantity > 1) {
@@ -1444,21 +1914,23 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                         vertical: 10,
                       ),
                       decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        color: const Color(0xFFF8FAFC),
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         '$_orderQuantity',
                         style: const TextStyle(
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w900,
                           fontSize: 16,
+                          color: AppTheme.navyColor,
                         ),
                       ),
                     ),
                     IconButton(
                       icon: const Icon(
                         Icons.add_circle_outline,
-                        color: AppTheme.primaryColor,
+                        color: AppTheme.navyColor,
                       ),
                       onPressed: () {
                         if (_orderQuantity < 20) {
@@ -1474,9 +1946,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 const Text(
                   'Delivery Address',
                   style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.navyColor,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -1490,6 +1962,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 ),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<String>(
+                  key: ValueKey('province_$_selectedProvince'),
                   initialValue: _selectedProvince,
                   isExpanded: true,
                   decoration: _boxedInputDecoration(hint: 'Select Province'),
@@ -1620,7 +2093,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             color: _pinnedLocation != null
-                                ? const Color(0xFF22C55E).withValues(alpha: 0.15)
+                                ? const Color(
+                                    0xFF22C55E,
+                                  ).withValues(alpha: 0.15)
                                 : AppTheme.primaryColor.withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
@@ -1706,9 +2181,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 const Text(
                   'Delivery Note / Preference (optional)',
                   style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.navyColor,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -1716,7 +2191,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                   controller: _deliveryNoteController,
                   maxLines: 3,
                   maxLength: 200,
-                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  style: const TextStyle(color: AppTheme.navyColor),
                   decoration: _boxedInputDecoration(
                     hint:
                         'e.g. Leave at the gate, call upon arrival, deliver after 5 PM...',
@@ -1728,15 +2203,21 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 const Text(
                   'Payment Method',
                   style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.navyColor,
                   ),
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
+                  key: ValueKey('payment_$_selectedPaymentMethod'),
                   initialValue: _selectedPaymentMethod,
                   isExpanded: true,
+                  style: const TextStyle(
+                    color: AppTheme.navyColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
                   decoration: _boxedInputDecoration(),
                   items: const [
                     DropdownMenuItem(
@@ -1768,18 +2249,107 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 ElevatedButton(
                   onPressed: _submitWaterOrder,
                   style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 50),
-                    backgroundColor: AppTheme.primaryColor,
+                    minimumSize: const Size(double.infinity, 52),
+                    backgroundColor: AppTheme.navyColor,
                   ),
                   child: const Text(
                     'Confirm Order Delivery',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildJugTypeOptionCard({
+    required String title,
+    required String subtitle,
+    required String imageAsset,
+  }) {
+    final isSelected = _selectedJugType == title;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedJugType = title;
+        });
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppTheme.primaryColor.withValues(alpha: 0.08)
+              : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppTheme.navyColor : const Color(0xFFCBD5E1),
+            width: isSelected ? 2.0 : 1.2,
+          ),
+        ),
+        child: Column(
+          children: [
+            Stack(
+              children: [
+                Container(
+                  width: double.infinity,
+                  height: 110,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFFE2E8F0),
+                      width: 1,
+                    ),
+                  ),
+                  child: Image.asset(imageAsset, fit: BoxFit.contain),
+                ),
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Icon(
+                    isSelected
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    color: isSelected
+                        ? AppTheme.navyColor
+                        : const Color(0xFF94A3B8),
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.navyColor,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF475569),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1797,7 +2367,10 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         : null;
     final pendingGcashOrders = myOrders
         .where(
-          (o) => o.paymentStatus == 'Pending' && o.paymentMethod == 'GCash',
+          (o) =>
+              o.paymentStatus == 'Pending' &&
+              o.paymentMethod == 'GCash' &&
+              o.orderStatus != OrderStatus.cancelled,
         )
         .toList();
 
@@ -1954,6 +2527,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                     itemBuilder: (context, index) {
                       final order = myOrders[index];
                       final isDone = order.orderStatus == OrderStatus.completed;
+                      final isCancelled =
+                          order.orderStatus == OrderStatus.cancelled;
+                      final canCancel = !isDone && !isCancelled;
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 16),
@@ -1987,6 +2563,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                 child: Icon(
                                   isDone
                                       ? Icons.check_circle_rounded
+                                      : isCancelled
+                                      ? Icons.cancel_rounded
                                       : Icons.local_shipping_rounded,
                                   color: order.orderStatus.color,
                                 ),
@@ -2054,7 +2632,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                     ),
                                   ),
                                   if (order.paymentStatus == 'Pending' &&
-                                      order.paymentMethod == 'GCash') ...[
+                                      order.paymentMethod == 'GCash' &&
+                                      !isCancelled) ...[
                                     const SizedBox(height: 6),
                                     InkWell(
                                       onTap: () => _showGcashPaymentDialog(
@@ -2130,6 +2709,48 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                       ),
                                     ),
                                   ),
+                                  if (canCancel) ...[
+                                    const SizedBox(height: 8),
+                                    InkWell(
+                                      onTap: () =>
+                                          _showCancelOrderDialog(order),
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFEF2F2),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(0xFFFCA5A5),
+                                          ),
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.cancel_outlined,
+                                              size: 13,
+                                              color: Color(0xFFDC2626),
+                                            ),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              'Cancel Order',
+                                              style: TextStyle(
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w800,
+                                                color: Color(0xFFDC2626),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ],
@@ -2331,9 +2952,16 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                     child: Icon(Icons.psychology_rounded, color: Colors.white),
                   ),
                   SizedBox(width: 12),
-                  Text(
-                    'AquaBot Virtual Support',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  Expanded(
+                    child: Text(
+                      'AquaBot Virtual Support',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        color: AppTheme.navyColor,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -2428,7 +3056,11 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         children: [
           const Text(
             'Profile Information',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.navyColor,
+            ),
           ),
           const SizedBox(height: 16),
           Container(
@@ -2437,57 +3069,53 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               color: isDark ? AppTheme.darkSurface : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+                color: isDark ? Colors.white10 : const Color(0xFFCBD5E1),
               ),
             ),
             child: Column(
               children: [
                 TextField(
                   controller: _profileNameController,
-                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  style: const TextStyle(color: AppTheme.navyColor),
                   decoration: _boxedInputDecoration(label: 'Name'),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _profilePhoneController,
-                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  style: const TextStyle(color: AppTheme.navyColor),
                   decoration: _boxedInputDecoration(label: 'Phone Number'),
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    final newName = _profileNameController.text.trim();
+                    final newPhone = _profilePhoneController.text.trim();
+                    if (newName.isEmpty || newPhone.isEmpty) {
+                      Helpers.showSnackBar(
+                        context,
+                        'Name and Phone Number cannot be empty.',
+                        isError: true,
+                      );
+                      return;
+                    }
+                    setState(() {
+                      _savedProfileName = newName;
+                      _savedProfilePhone = newPhone;
+                    });
+                    final auth = Provider.of<AuthProvider>(
+                      context,
+                      listen: false,
+                    );
+                    await auth.updateProfile(name: newName, phone: newPhone);
+                    if (!mounted) return;
                     Helpers.showSnackBar(
                       context,
-                      'Profile information updated successfully!',
+                      'Profile information saved successfully!',
                     );
                   },
                   child: const Text('Save Changes'),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Preferences',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: SwitchListTile(
-              title: const Text(
-                'Push Notifications',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              subtitle: const Text(
-                'Get alerts about dispatch status and promo discount coupons.',
-                style: TextStyle(fontSize: 11),
-              ),
-              value: _notificationsEnabled,
-              onChanged: (val) {
-                setState(() => _notificationsEnabled = val);
-                Helpers.showSnackBar(context, 'Notification settings updated.');
-              },
-              activeThumbColor: AppTheme.primaryColor,
             ),
           ),
         ],
@@ -2524,17 +3152,17 @@ class _SidebarItemTileState extends State<_SidebarItemTile> {
     final bool highlighted = active || _isHovered;
 
     Color backgroundColor;
+    Color contentColor;
     if (active) {
-      backgroundColor = AppTheme.primaryColor;
+      backgroundColor = AppTheme.navyColor;
+      contentColor = Colors.white;
     } else if (_isHovered) {
-      backgroundColor = const Color(0xFF334155); // Dark Gray hover
+      backgroundColor = const Color(0xFFEFF6FF);
+      contentColor = widget.textColor ?? AppTheme.navyColor;
     } else {
       backgroundColor = Colors.transparent;
+      contentColor = widget.textColor ?? const Color(0xFF334155);
     }
-
-    final Color contentColor = highlighted
-        ? Colors.white
-        : (widget.textColor ?? const Color(0xFF475569));
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),

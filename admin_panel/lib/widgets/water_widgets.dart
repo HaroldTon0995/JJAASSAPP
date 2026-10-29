@@ -324,40 +324,40 @@ class WaveBackground extends StatelessWidget {
 class WaveBackgroundPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    // First wave (lighter soft cyan)
+    // First wave (Logo Deep Navy tint)
     final paint1 = Paint()
-      ..color = const Color(0xFFE0F2F1)
+      ..color = const Color(0xFF0F2B5C).withValues(alpha: 0.10)
       ..style = PaintingStyle.fill;
 
     final path1 = Path();
-    path1.moveTo(0, size.height * 0.88);
+    path1.moveTo(0, size.height * 0.86);
     path1.quadraticBezierTo(
-      size.width * 0.25, size.height * 0.83,
-      size.width * 0.55, size.height * 0.91,
+      size.width * 0.25, size.height * 0.80,
+      size.width * 0.55, size.height * 0.89,
     );
     path1.quadraticBezierTo(
-      size.width * 0.8, size.height * 0.96,
-      size.width, size.height * 0.90,
+      size.width * 0.8, size.height * 0.95,
+      size.width, size.height * 0.88,
     );
     path1.lineTo(size.width, size.height);
     path1.lineTo(0, size.height);
     path1.close();
     canvas.drawPath(path1, paint1);
 
-    // Second wave (slightly darker teal sheen)
+    // Second wave (Logo Cornflower/Azure Blue tint)
     final paint2 = Paint()
-      ..color = const Color(0xFFB2DFDB).withValues(alpha: 0.6)
+      ..color = const Color(0xFF4788D7).withValues(alpha: 0.16)
       ..style = PaintingStyle.fill;
 
     final path2 = Path();
-    path2.moveTo(0, size.height * 0.93);
+    path2.moveTo(0, size.height * 0.92);
     path2.quadraticBezierTo(
       size.width * 0.35, size.height * 0.97,
-      size.width * 0.65, size.height * 0.90,
+      size.width * 0.65, size.height * 0.89,
     );
     path2.quadraticBezierTo(
-      size.width * 0.85, size.height * 0.86,
-      size.width, size.height * 0.93,
+      size.width * 0.85, size.height * 0.84,
+      size.width, size.height * 0.92,
     );
     path2.lineTo(size.width, size.height);
     path2.lineTo(0, size.height);
