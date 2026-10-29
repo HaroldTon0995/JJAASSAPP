@@ -1,0 +1,11 @@
+{
+  "buildCommand": "echo 'Using prebuilt Flutter Web bundle'",
+  "outputDirectory": "public",
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
