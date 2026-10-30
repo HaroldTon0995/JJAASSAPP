@@ -2579,10 +2579,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             final isDelivery = fulfillmentType == 'Delivery';
+            final screenWidth = MediaQuery.of(context).size.width;
+            final dialogWidth = screenWidth < 580 ? (screenWidth * 0.92) : 520.0;
+            final isMobile = screenWidth < 480;
 
             return AlertDialog(
               backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Row(
                 children: [
                   Container(
@@ -2598,19 +2602,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Text(
-                    'Create New Order',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  Expanded(
+                    child: Text(
+                      'Create New Order',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: isDark ? Colors.white : const Color(0xFF1E293B),
+                      ),
                     ),
                   ),
                 ],
               ),
               content: SingleChildScrollView(
                 child: SizedBox(
-                  width: 520,
+                  width: dialogWidth,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2665,12 +2672,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                       color: isDelivery ? AppTheme.primaryColor : Colors.grey,
                                     ),
                                     const SizedBox(width: 8),
-                                    Text(
-                                      'Home Delivery',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDelivery ? AppTheme.primaryColor : (isDark ? Colors.white70 : const Color(0xFF1E293B)),
+                                    Flexible(
+                                      child: Text(
+                                        'Home Delivery',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDelivery ? AppTheme.primaryColor : (isDark ? Colors.white70 : const Color(0xFF1E293B)),
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -2714,12 +2724,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                       color: !isDelivery ? const Color(0xFF10B981) : Colors.grey,
                                     ),
                                     const SizedBox(width: 8),
-                                    Text(
-                                      'Store Pickup / Walk-in',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: !isDelivery ? const Color(0xFF10B981) : (isDark ? Colors.white70 : const Color(0xFF1E293B)),
+                                    Flexible(
+                                      child: Text(
+                                        'Store Pickup',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: !isDelivery ? const Color(0xFF10B981) : (isDark ? Colors.white70 : const Color(0xFF1E293B)),
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -2742,10 +2755,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           ChoiceChip(
-                            label: const Text('Unregistered / Walk-in Customer'),
+                            label: const Text('Unregistered / Walk-in'),
                             selected: !isRegistered,
                             onSelected: (val) {
                               setDialogState(() {
@@ -2759,9 +2774,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               });
                             },
                           ),
-                          const SizedBox(width: 8),
                           ChoiceChip(
-                            label: const Text('Registered Customer Account'),
+                            label: const Text('Registered Customer'),
                             selected: isRegistered,
                             onSelected: (val) {
                               setDialogState(() {
@@ -2789,6 +2803,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           )
                         else
                           DropdownButtonFormField<UserModel>(
+                            isExpanded: true,
                             initialValue: selectedCustomer,
                             dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
                             decoration: const InputDecoration(
@@ -2798,7 +2813,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             items: customersList.map((cust) {
                               return DropdownMenuItem<UserModel>(
                                 value: cust,
-                                child: Text('${cust.name} (${cust.email})'),
+                                child: Text(
+                                  '${cust.name} (${cust.email})',
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
                               );
                             }).toList(),
                             onChanged: (val) {
@@ -2881,6 +2900,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 )
                               else
                                 DropdownButtonFormField<UserModel?>(
+                                  isExpanded: true,
                                   initialValue: selectedDriver,
                                   dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
                                   decoration: const InputDecoration(
@@ -2891,12 +2911,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                   items: [
                                     const DropdownMenuItem<UserModel?>(
                                       value: null,
-                                      child: Text('Leave Unassigned (Open for Drivers to Accept)'),
+                                      child: Text(
+                                        'Leave Unassigned (Open for Drivers to Accept)',
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
                                     ),
                                     ...driversList.map((d) {
                                       return DropdownMenuItem<UserModel?>(
                                         value: d,
-                                        child: Text('🛵 ${d.name} (${d.email})'),
+                                        child: Text(
+                                          '🛵 ${d.name} (${d.email})',
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
+                                        ),
                                       );
                                     }),
                                   ],
@@ -2949,92 +2977,179 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: DropdownButtonFormField<String>(
-                              initialValue: selectedWaterType,
-                              dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
-                              decoration: const InputDecoration(labelText: 'Water Product'),
-                              items: orderProvider.waterProducts.map((prod) {
-                                final name = prod['name'] as String;
-                                final price = prod['price'] as double;
-                                return DropdownMenuItem<String>(
-                                  value: name,
-                                  child: Text('$name (₱${price.toStringAsFixed(0)})'),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setDialogState(() {
-                                    selectedWaterType = val;
-                                    final match = orderProvider.waterProducts.firstWhere((p) => p['name'] == val);
-                                    pricePerUnit = match['price'] as double;
-                                  });
-                                }
-                              },
-                            ),
+                      if (isMobile) ...[
+                        DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          initialValue: selectedWaterType,
+                          dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
+                          decoration: const InputDecoration(labelText: 'Water Product'),
+                          items: orderProvider.waterProducts.map((prod) {
+                            final name = prod['name'] as String;
+                            final price = prod['price'] as double;
+                            return DropdownMenuItem<String>(
+                              value: name,
+                              child: Text(
+                                '$name (₱${price.toStringAsFixed(0)})',
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setDialogState(() {
+                                selectedWaterType = val;
+                                final match = orderProvider.waterProducts.firstWhere((p) => p['name'] == val);
+                                pricePerUnit = match['price'] as double;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: qtyController,
+                          keyboardType: TextInputType.number,
+                          onChanged: (val) => setDialogState(() {}),
+                          decoration: const InputDecoration(
+                            labelText: 'Quantity',
+                            prefixIcon: Icon(Icons.water_drop_rounded),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            flex: 2,
-                            child: TextField(
-                              controller: qtyController,
-                              keyboardType: TextInputType.number,
-                              onChanged: (val) => setDialogState(() {}),
-                              decoration: const InputDecoration(
-                                labelText: 'Quantity',
-                                prefixIcon: Icon(Icons.water_drop_rounded),
+                        ),
+                      ] else ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: DropdownButtonFormField<String>(
+                                isExpanded: true,
+                                initialValue: selectedWaterType,
+                                dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
+                                decoration: const InputDecoration(labelText: 'Water Product'),
+                                items: orderProvider.waterProducts.map((prod) {
+                                  final name = prod['name'] as String;
+                                  final price = prod['price'] as double;
+                                  return DropdownMenuItem<String>(
+                                    value: name,
+                                    child: Text(
+                                      '$name (₱${price.toStringAsFixed(0)})',
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setDialogState(() {
+                                      selectedWaterType = val;
+                                      final match = orderProvider.waterProducts.firstWhere((p) => p['name'] == val);
+                                      pricePerUnit = match['price'] as double;
+                                    });
+                                  }
+                                },
                               ),
                             ),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: TextField(
+                                controller: qtyController,
+                                keyboardType: TextInputType.number,
+                                onChanged: (val) => setDialogState(() {}),
+                                decoration: const InputDecoration(
+                                  labelText: 'Quantity',
+                                  prefixIcon: Icon(Icons.water_drop_rounded),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: selectedPaymentMethod,
-                              dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
-                              decoration: const InputDecoration(labelText: 'Payment Method'),
-                              items: [
-                                const DropdownMenuItem(value: 'Cash', child: Text('Cash')),
-                                const DropdownMenuItem(value: 'GCash', child: Text('GCash')),
-                                if (isDelivery)
-                                  const DropdownMenuItem(value: 'Cash on Delivery', child: Text('Cash on Delivery (COD)')),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setDialogState(() {
-                                    selectedPaymentMethod = val;
-                                  });
-                                }
-                              },
+                      if (isMobile) ...[
+                        DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          initialValue: selectedPaymentMethod,
+                          dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
+                          decoration: const InputDecoration(labelText: 'Payment Method'),
+                          items: [
+                            const DropdownMenuItem(value: 'Cash', child: Text('Cash', overflow: TextOverflow.ellipsis, maxLines: 1)),
+                            const DropdownMenuItem(value: 'GCash', child: Text('GCash', overflow: TextOverflow.ellipsis, maxLines: 1)),
+                            if (isDelivery)
+                              const DropdownMenuItem(value: 'Cash on Delivery', child: Text('Cash on Delivery (COD)', overflow: TextOverflow.ellipsis, maxLines: 1)),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) {
+                              setDialogState(() {
+                                selectedPaymentMethod = val;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          initialValue: selectedPaymentStatus,
+                          dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
+                          decoration: const InputDecoration(labelText: 'Payment Status'),
+                          items: const [
+                            DropdownMenuItem(value: 'Pending', child: Text('Pending', overflow: TextOverflow.ellipsis, maxLines: 1)),
+                            DropdownMenuItem(value: 'Paid', child: Text('Paid', overflow: TextOverflow.ellipsis, maxLines: 1)),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) {
+                              setDialogState(() {
+                                selectedPaymentStatus = val;
+                              });
+                            }
+                          },
+                        ),
+                      ] else ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                isExpanded: true,
+                                initialValue: selectedPaymentMethod,
+                                dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
+                                decoration: const InputDecoration(labelText: 'Payment Method'),
+                                items: [
+                                  const DropdownMenuItem(value: 'Cash', child: Text('Cash', overflow: TextOverflow.ellipsis, maxLines: 1)),
+                                  const DropdownMenuItem(value: 'GCash', child: Text('GCash', overflow: TextOverflow.ellipsis, maxLines: 1)),
+                                  if (isDelivery)
+                                    const DropdownMenuItem(value: 'Cash on Delivery', child: Text('Cash on Delivery (COD)', overflow: TextOverflow.ellipsis, maxLines: 1)),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setDialogState(() {
+                                      selectedPaymentMethod = val;
+                                    });
+                                  }
+                                },
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: selectedPaymentStatus,
-                              dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
-                              decoration: const InputDecoration(labelText: 'Payment Status'),
-                              items: const [
-                                DropdownMenuItem(value: 'Pending', child: Text('Pending')),
-                                DropdownMenuItem(value: 'Paid', child: Text('Paid')),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setDialogState(() {
-                                    selectedPaymentStatus = val;
-                                  });
-                                }
-                              },
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                isExpanded: true,
+                                initialValue: selectedPaymentStatus,
+                                dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
+                                decoration: const InputDecoration(labelText: 'Payment Status'),
+                                items: const [
+                                  DropdownMenuItem(value: 'Pending', child: Text('Pending', overflow: TextOverflow.ellipsis, maxLines: 1)),
+                                  DropdownMenuItem(value: 'Paid', child: Text('Paid', overflow: TextOverflow.ellipsis, maxLines: 1)),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setDialogState(() {
+                                      selectedPaymentStatus = val;
+                                    });
+                                  }
+                                },
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       Builder(
                         builder: (context) {
@@ -3072,88 +3187,96 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    final name = nameController.text.trim();
-                    final phone = phoneController.text.trim();
-                    String address = addressController.text.trim();
-                    final qty = int.tryParse(qtyController.text) ?? 1;
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        final name = nameController.text.trim();
+                        final phone = phoneController.text.trim();
+                        String address = addressController.text.trim();
+                        final qty = int.tryParse(qtyController.text) ?? 1;
 
-                    if (name.isEmpty) {
-                      Helpers.showSnackBar(context, 'Please enter customer name.', isError: true);
-                      return;
-                    }
-                    if (isDelivery && address.isEmpty) {
-                      Helpers.showSnackBar(context, 'Please enter delivery address for home delivery.', isError: true);
-                      return;
-                    }
-                    if (!isDelivery && address.isEmpty) {
-                      address = 'Store Pickup / Walk-in (JJAASS Water Station)';
-                    }
-
-                    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-                    final custId = isRegistered && selectedCustomer != null
-                        ? selectedCustomer!.id
-                        : 'usr_walkin_guest';
-
-                    // Determine order status & driver assignment based on user request:
-                    // If Delivery: Confirm & Assign driver if selected (OrderStatus.assigned), or Confirmed
-                    // If Pickup: Confirmed, and NO rider assigned
-                    final OrderStatus orderStatus = isDelivery
-                        ? (selectedDriver != null ? OrderStatus.assigned : OrderStatus.confirmed)
-                        : OrderStatus.confirmed;
-
-                    final String? driverId = isDelivery ? selectedDriver?.id : null;
-                    final String? driverName = isDelivery
-                        ? selectedDriver?.name
-                        : 'Not Needed (Walk-in/Pickup)';
-
-                    try {
-                      final newOrder = await orderProvider.placeOrder(
-                        customerId: custId,
-                        customerName: name,
-                        customerPhone: phone.isNotEmpty ? phone : '+63 Guest',
-                        deliveryAddress: address,
-                        waterType: selectedWaterType,
-                        quantity: qty,
-                        pricePerUnit: pricePerUnit,
-                        paymentMethod: selectedPaymentMethod,
-                        paymentStatus: selectedPaymentStatus,
-                        orderStatus: orderStatus,
-                        driverId: driverId,
-                        driverName: driverName,
-                      );
-
-                      if (context.mounted) {
-                        Navigator.of(context).pop();
-                        final String successMsg = isDelivery
-                            ? (selectedDriver != null
-                                ? 'Order ${newOrder.id} created & assigned to ${selectedDriver!.name}!'
-                                : 'Order ${newOrder.id} created for delivery (confirmed)!')
-                            : 'Store pickup order ${newOrder.id} created successfully!';
-                        Helpers.showSnackBar(context, successMsg);
-
-                        if (selectedPaymentMethod == 'GCash' && selectedPaymentStatus == 'Pending') {
-                          _showGcashPaymentDialog(newOrder, isDark);
+                        if (name.isEmpty) {
+                          Helpers.showSnackBar(context, 'Please enter customer name.', isError: true);
+                          return;
                         }
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        Helpers.showSnackBar(context, 'Failed to create order: $e', isError: true);
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.check_circle_rounded, size: 16),
-                  label: const Text('Confirm & Create Order'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
+                        if (isDelivery && address.isEmpty) {
+                          Helpers.showSnackBar(context, 'Please enter delivery address for home delivery.', isError: true);
+                          return;
+                        }
+                        if (!isDelivery && address.isEmpty) {
+                          address = 'Store Pickup / Walk-in (JJAASS Water Station)';
+                        }
+
+                        final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+                        final custId = isRegistered && selectedCustomer != null
+                            ? selectedCustomer!.id
+                            : 'usr_walkin_guest';
+
+                        // Determine order status & driver assignment based on user request:
+                        // If Delivery: Confirm & Assign driver if selected (OrderStatus.assigned), or Confirmed
+                        // If Pickup: Confirmed, and NO rider assigned
+                        final OrderStatus orderStatus = isDelivery
+                            ? (selectedDriver != null ? OrderStatus.assigned : OrderStatus.confirmed)
+                            : OrderStatus.confirmed;
+
+                        final String? driverId = isDelivery ? selectedDriver?.id : null;
+                        final String? driverName = isDelivery
+                            ? selectedDriver?.name
+                            : 'Not Needed (Walk-in/Pickup)';
+
+                        try {
+                          final newOrder = await orderProvider.placeOrder(
+                            customerId: custId,
+                            customerName: name,
+                            customerPhone: phone.isNotEmpty ? phone : '+63 Guest',
+                            deliveryAddress: address,
+                            waterType: selectedWaterType,
+                            quantity: qty,
+                            pricePerUnit: pricePerUnit,
+                            paymentMethod: selectedPaymentMethod,
+                            paymentStatus: selectedPaymentStatus,
+                            orderStatus: orderStatus,
+                            driverId: driverId,
+                            driverName: driverName,
+                          );
+
+                          if (context.mounted) {
+                            Navigator.of(context).pop();
+                            final String successMsg = isDelivery
+                                ? (selectedDriver != null
+                                    ? 'Order ${newOrder.id} created & assigned to ${selectedDriver!.name}!'
+                                    : 'Order ${newOrder.id} created for delivery (confirmed)!')
+                                : 'Store pickup order ${newOrder.id} created successfully!';
+                            Helpers.showSnackBar(context, successMsg);
+
+                            if (selectedPaymentMethod == 'GCash' && selectedPaymentStatus == 'Pending') {
+                              _showGcashPaymentDialog(newOrder, isDark);
+                            }
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            Helpers.showSnackBar(context, 'Failed to create order: $e', isError: true);
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.check_circle_rounded, size: 16),
+                      label: const Text('Confirm & Create Order'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             );
@@ -3216,31 +3339,34 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           const SizedBox(height: 16),
           // Filter Tabs
-          Row(
-            children:
-                ['All', 'Pending', 'On Delivery', 'Completed', 'Cancelled'].map(
-                  (status) {
-                    final isSel = _activeOrderFilter == status;
-                    return Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(status),
-                        selected: isSel,
-                        selectedColor: AppTheme.primaryColor,
-                        labelStyle: TextStyle(
-                          color: isSel ? Colors.white : Colors.grey.shade700,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children:
+                  ['All', 'Pending', 'On Delivery', 'Completed', 'Cancelled'].map(
+                    (status) {
+                      final isSel = _activeOrderFilter == status;
+                      return Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(status),
+                          selected: isSel,
+                          selectedColor: AppTheme.primaryColor,
+                          labelStyle: TextStyle(
+                            color: isSel ? Colors.white : Colors.grey.shade700,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                          onSelected: (val) {
+                            setState(() {
+                              _activeOrderFilter = status;
+                            });
+                          },
                         ),
-                        onSelected: (val) {
-                          setState(() {
-                            _activeOrderFilter = status;
-                          });
-                        },
-                      ),
-                    );
-                  },
-                ).toList(),
+                      );
+                    },
+                  ).toList(),
+            ),
           ),
           const SizedBox(height: 20),
           Expanded(
@@ -3334,14 +3460,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 Text(
                                   'Assigned Driver: ${order.requiresDriver ? (order.driverName ?? "Unassigned") : "Not Needed (Walk-in/Pickup)"}',
                                 ),
-                                Row(
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 8,
+                                  runSpacing: 4,
                                   children: [
                                     Text(
                                       'Total Amount: ${order.formattedTotal} (${order.paymentMethod} • ${order.paymentStatus})',
+                                      style: const TextStyle(fontWeight: FontWeight.w600),
                                     ),
                                     if (order.paymentStatus == 'Pending' &&
                                         order.paymentMethod == 'GCash') ...[
-                                      const SizedBox(width: 8),
                                       InkWell(
                                         onTap: () => _showGcashPaymentDialog(
                                           order,
@@ -3495,8 +3624,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                   ),
                                 ],
                                 const Divider(height: 20),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
+                                Wrap(
+                                  alignment: WrapAlignment.end,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 6,
+                                  runSpacing: 6,
                                   children: [
                                     const Text(
                                       'Change Status: ',
@@ -3505,7 +3637,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                         color: Colors.grey,
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
                                     ...[
                                       'Pending',
                                       'Confirmed',
@@ -3520,25 +3651,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                       if (st == order.orderStatus.displayName) {
                                         return const SizedBox.shrink();
                                       }
-                                      return Container(
-                                        margin: const EdgeInsets.only(left: 6),
-                                        child: OutlinedButton(
-                                          onPressed: () =>
-                                              _updateOrderStatus(order.id, st),
-                                          style: OutlinedButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            minimumSize: Size.zero,
-                                            tapTargetSize: MaterialTapTargetSize
-                                                .shrinkWrap,
+                                      return OutlinedButton(
+                                        onPressed: () =>
+                                            _updateOrderStatus(order.id, st),
+                                        style: OutlinedButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
                                           ),
-                                          child: Text(
-                                            st,
-                                            style: const TextStyle(
-                                              fontSize: 10,
-                                            ),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize: MaterialTapTargetSize
+                                              .shrinkWrap,
+                                        ),
+                                        child: Text(
+                                          st,
+                                          style: const TextStyle(
+                                            fontSize: 10,
                                           ),
                                         ),
                                       );
@@ -4366,6 +4494,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Text('Assign a rider for Order ${order.id}:'),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<UserModel>(
+                    isExpanded: true,
                     initialValue: selectedDriver,
                     dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
                     decoration: const InputDecoration(
@@ -4373,7 +4502,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       prefixIcon: Icon(Icons.delivery_dining_rounded),
                     ),
                     items: driversList.map((d) {
-                      return DropdownMenuItem(value: d, child: Text(d.name));
+                      return DropdownMenuItem(
+                        value: d,
+                        child: Text(
+                          '${d.name} (${d.email})',
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      );
                     }).toList(),
                     onChanged: (val) {
                       if (val != null) {

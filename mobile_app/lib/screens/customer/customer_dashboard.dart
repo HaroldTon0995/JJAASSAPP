@@ -3179,9 +3179,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        activeDelivery.id.startsWith('#')
-                            ? 'Live Order ${activeDelivery.id}'
-                            : 'Live Order #${activeDelivery.id}',
+                        'Live Order #${activeDelivery.id.replaceAll(RegExp(r"^#+"), "")}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
