@@ -2536,21 +2536,32 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // Dialog helper to place a walk-in / guest order
+  // Dialog helper to create a New Order (Delivery or Store Pickup)
   void _showCreateOrderDialog(bool isDark) {
     final customersList = _allUsers
         .where((u) => u.role == UserRole.customer)
         .toList();
+    final driversList = _allUsers
+        .where((u) => u.role == UserRole.driver)
+        .toList();
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
 
-    UserModel? selectedCustomer;
-    bool isWalkInGuest = true;
+    // Fulfillment choice: 'Delivery' vs 'Pickup'
+    String fulfillmentType = 'Delivery';
 
-    final nameController = TextEditingController(text: 'Walk-in Guest');
+    // Customer mode: isRegistered vs isUnregistered
+    bool isRegistered = false;
+    UserModel? selectedCustomer;
+
+    // Delivery Driver selection (only for Delivery)
+    UserModel? selectedDriver;
+    if (driversList.isNotEmpty) {
+      selectedDriver = driversList.first;
+    }
+
+    final nameController = TextEditingController();
     final phoneController = TextEditingController(text: '+63 ');
-    final addressController = TextEditingController(
-      text: 'Walk-in Pickup / Station Store',
-    );
+    final addressController = TextEditingController();
     final qtyController = TextEditingController(text: '1');
 
     String selectedWaterType = orderProvider.waterProducts.isNotEmpty
@@ -2559,28 +2570,39 @@ class _AdminDashboardState extends State<AdminDashboard> {
     double pricePerUnit = orderProvider.waterProducts.isNotEmpty
         ? (orderProvider.waterProducts.first['price'] as double)
         : 50.0;
-    String selectedPaymentMethod = 'Cash';
-    String selectedPaymentStatus = 'Paid';
+    String selectedPaymentMethod = 'Cash on Delivery';
+    String selectedPaymentStatus = 'Pending';
 
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final isDelivery = fulfillmentType == 'Delivery';
+
             return AlertDialog(
               backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: Row(
                 children: [
-                  const Icon(
-                    Icons.add_shopping_cart_rounded,
-                    color: AppTheme.primaryColor,
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.add_shopping_cart_rounded,
+                      color: AppTheme.primaryColor,
+                      size: 22,
+                    ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   Text(
-                    'Place Walk-in / Guest Order',
+                    'Create New Order',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 18,
                       color: isDark ? Colors.white : const Color(0xFF1E293B),
                     ),
                   ),
@@ -2588,109 +2610,213 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
               content: SingleChildScrollView(
                 child: SizedBox(
-                  width: 450,
+                  width: 520,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 1. FULFILLMENT TYPE TOGGLE (Delivery vs Store Pickup)
                       Text(
-                        'CUSTOMER CONNECTION',
+                        'ORDER FULFILLMENT TYPE',
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          color: const Color(0xFF475569),
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () {
+                                setDialogState(() {
+                                  fulfillmentType = 'Delivery';
+                                  if (addressController.text.contains('Store Pickup')) {
+                                    addressController.clear();
+                                  }
+                                  if (selectedPaymentMethod == 'Cash') {
+                                    selectedPaymentMethod = 'Cash on Delivery';
+                                  }
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                                decoration: BoxDecoration(
+                                  color: isDelivery
+                                      ? AppTheme.primaryColor.withValues(alpha: 0.1)
+                                      : (isDark ? Colors.white10 : const Color(0xFFF8FAFC)),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isDelivery
+                                        ? AppTheme.primaryColor
+                                        : (isDark ? Colors.white24 : const Color(0xFFCBD5E1)),
+                                    width: isDelivery ? 2.0 : 1.0,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.local_shipping_rounded,
+                                      size: 20,
+                                      color: isDelivery ? AppTheme.primaryColor : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Home Delivery',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDelivery ? AppTheme.primaryColor : (isDark ? Colors.white70 : const Color(0xFF1E293B)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () {
+                                setDialogState(() {
+                                  fulfillmentType = 'Pickup';
+                                  addressController.text = 'Store Pickup / Walk-in (JJAASS Water Station)';
+                                  if (selectedPaymentMethod == 'Cash on Delivery') {
+                                    selectedPaymentMethod = 'Cash';
+                                  }
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                                decoration: BoxDecoration(
+                                  color: !isDelivery
+                                      ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                                      : (isDark ? Colors.white10 : const Color(0xFFF8FAFC)),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: !isDelivery
+                                        ? const Color(0xFF10B981)
+                                        : (isDark ? Colors.white24 : const Color(0xFFCBD5E1)),
+                                    width: !isDelivery ? 2.0 : 1.0,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.storefront_rounded,
+                                      size: 20,
+                                      color: !isDelivery ? const Color(0xFF10B981) : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Store Pickup / Walk-in',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: !isDelivery ? const Color(0xFF10B981) : (isDark ? Colors.white70 : const Color(0xFF1E293B)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+
+                      // 2. CUSTOMER DETAILS (Registered vs Unregistered)
+                      Text(
+                        'CUSTOMER INFORMATION',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                          letterSpacing: 0.5,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Row(
                         children: [
                           ChoiceChip(
-                            label: const Text('Walk-in Guest'),
-                            selected: isWalkInGuest,
+                            label: const Text('Unregistered / Walk-in Customer'),
+                            selected: !isRegistered,
                             onSelected: (val) {
                               setDialogState(() {
-                                isWalkInGuest = true;
+                                isRegistered = false;
                                 selectedCustomer = null;
-                                nameController.text = 'Walk-in Guest';
+                                nameController.clear();
                                 phoneController.text = '+63 ';
-                                addressController.text =
-                                    'Walk-in Pickup / Station Store';
+                                if (isDelivery) {
+                                  addressController.clear();
+                                }
                               });
                             },
                           ),
                           const SizedBox(width: 8),
                           ChoiceChip(
-                            label: const Text('Registered Customer'),
-                            selected: !isWalkInGuest,
+                            label: const Text('Registered Customer Account'),
+                            selected: isRegistered,
                             onSelected: (val) {
                               setDialogState(() {
-                                isWalkInGuest = false;
+                                isRegistered = true;
                                 if (customersList.isNotEmpty) {
                                   selectedCustomer = customersList.first;
                                   nameController.text = selectedCustomer!.name;
                                   phoneController.text = '+63 912 345 6789';
-                                  addressController.text = 'Delivery Address';
-                                } else {
-                                  nameController.text = '';
-                                  phoneController.text = '+63 ';
-                                  addressController.text = '';
                                 }
                               });
                             },
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
 
-                      if (!isWalkInGuest) ...[
-                        customersList.isEmpty
-                            ? const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 8.0),
-                                child: Text(
-                                  'No registered customers found in database.',
-                                  style: TextStyle(
-                                    color: Colors.redAccent,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              )
-                            : DropdownButtonFormField<UserModel>(
-                                initialValue: selectedCustomer,
-                                dropdownColor: isDark
-                                    ? AppTheme.darkSurface
-                                    : Colors.white,
-                                decoration: const InputDecoration(
-                                  labelText: 'Select Customer Account',
-                                  prefixIcon: Icon(
-                                    Icons.person_outline_rounded,
-                                  ),
-                                ),
-                                items: customersList.map((cust) {
-                                  return DropdownMenuItem<UserModel>(
-                                    value: cust,
-                                    child: Text(cust.name),
-                                  );
-                                }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setDialogState(() {
-                                      selectedCustomer = val;
-                                      nameController.text = val.name;
-                                      phoneController.text = '+63 912 345 6789';
-                                      addressController.text =
-                                          'Delivery Address';
-                                    });
-                                  }
-                                },
-                              ),
+                      if (isRegistered) ...[
+                        if (customersList.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 6.0),
+                            child: Text(
+                              'No registered customer accounts found. You can enter details manually below.',
+                              style: TextStyle(color: Colors.orange, fontSize: 12),
+                            ),
+                          )
+                        else
+                          DropdownButtonFormField<UserModel>(
+                            initialValue: selectedCustomer,
+                            dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
+                            decoration: const InputDecoration(
+                              labelText: 'Select Registered Customer',
+                              prefixIcon: Icon(Icons.account_circle_rounded),
+                            ),
+                            items: customersList.map((cust) {
+                              return DropdownMenuItem<UserModel>(
+                                value: cust,
+                                child: Text('${cust.name} (${cust.email})'),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setDialogState(() {
+                                  selectedCustomer = val;
+                                  nameController.text = val.name;
+                                });
+                              }
+                            },
+                          ),
                         const SizedBox(height: 12),
                       ],
 
                       TextField(
                         controller: nameController,
                         decoration: const InputDecoration(
-                          labelText: 'Customer Full Name',
+                          labelText: 'Customer Full Name *',
                           prefixIcon: Icon(Icons.person),
                         ),
                       ),
@@ -2705,49 +2831,145 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: addressController,
-                        decoration: const InputDecoration(
-                          labelText: 'Delivery / Pickup Address',
-                          prefixIcon: Icon(Icons.location_on),
+                        enabled: isDelivery,
+                        decoration: InputDecoration(
+                          labelText: isDelivery ? 'Delivery Address (House no., street, brgy.) *' : 'Pickup Location',
+                          prefixIcon: Icon(isDelivery ? Icons.location_on : Icons.storefront_rounded),
+                          helperText: !isDelivery ? 'Store pickup orders are collected at the station' : null,
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 18),
 
+                      // 3. DRIVER ASSIGNMENT (Only shown for Home Delivery)
+                      if (isDelivery) ...[
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(
+                                    Icons.delivery_dining_rounded,
+                                    color: Color(0xFF8B5CF6),
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'ASSIGN DELIVERY DRIVER',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF7C3AED),
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              if (driversList.isEmpty)
+                                const Text(
+                                  'No registered drivers found. The order will be created as Confirmed (Open for dispatch).',
+                                  style: TextStyle(fontSize: 12, color: Color(0xFF7C3AED)),
+                                )
+                              else
+                                DropdownButtonFormField<UserModel?>(
+                                  initialValue: selectedDriver,
+                                  dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Select Driver to Dispatch',
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                  ),
+                                  items: [
+                                    const DropdownMenuItem<UserModel?>(
+                                      value: null,
+                                      child: Text('Leave Unassigned (Open for Drivers to Accept)'),
+                                    ),
+                                    ...driversList.map((d) {
+                                      return DropdownMenuItem<UserModel?>(
+                                        value: d,
+                                        child: Text('🛵 ${d.name} (${d.email})'),
+                                      );
+                                    }),
+                                  ],
+                                  onChanged: (val) {
+                                    setDialogState(() {
+                                      selectedDriver = val;
+                                    });
+                                  },
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                      ] else ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.25)),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.info_outline_rounded, color: Color(0xFF059669), size: 18),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Store Pickup: No delivery rider will be assigned.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF047857),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                      ],
+
+                      // 4. ORDER & PRODUCT DETAILS
                       Text(
-                        'ORDER DETAILS',
+                        'PRODUCTS & PAYMENT',
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          color: const Color(0xFF475569),
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                          letterSpacing: 0.5,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Row(
                         children: [
                           Expanded(
+                            flex: 3,
                             child: DropdownButtonFormField<String>(
                               initialValue: selectedWaterType,
-                              dropdownColor: isDark
-                                  ? AppTheme.darkSurface
-                                  : Colors.white,
-                              decoration: const InputDecoration(
-                                labelText: 'Water Type',
-                              ),
+                              dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
+                              decoration: const InputDecoration(labelText: 'Water Product'),
                               items: orderProvider.waterProducts.map((prod) {
                                 final name = prod['name'] as String;
                                 final price = prod['price'] as double;
                                 return DropdownMenuItem<String>(
                                   value: name,
-                                  child: Text(
-                                    '$name (₱${price.toStringAsFixed(0)})',
-                                  ),
+                                  child: Text('$name (₱${price.toStringAsFixed(0)})'),
                                 );
                               }).toList(),
                               onChanged: (val) {
                                 if (val != null) {
                                   setDialogState(() {
                                     selectedWaterType = val;
-                                    final match = orderProvider.waterProducts
-                                        .firstWhere((p) => p['name'] == val);
+                                    final match = orderProvider.waterProducts.firstWhere((p) => p['name'] == val);
                                     pricePerUnit = match['price'] as double;
                                   });
                                 }
@@ -2756,14 +2978,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           ),
                           const SizedBox(width: 12),
                           Expanded(
+                            flex: 2,
                             child: TextField(
                               controller: qtyController,
                               keyboardType: TextInputType.number,
-                              onChanged: (val) {
-                                setDialogState(() {});
-                              },
+                              onChanged: (val) => setDialogState(() {}),
                               decoration: const InputDecoration(
-                                labelText: 'Quantity (Jugs)',
+                                labelText: 'Quantity',
                                 prefixIcon: Icon(Icons.water_drop_rounded),
                               ),
                             ),
@@ -2776,25 +2997,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           Expanded(
                             child: DropdownButtonFormField<String>(
                               initialValue: selectedPaymentMethod,
-                              dropdownColor: isDark
-                                  ? AppTheme.darkSurface
-                                  : Colors.white,
-                              decoration: const InputDecoration(
-                                labelText: 'Payment Method',
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'Cash',
-                                  child: Text('Cash'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'GCash',
-                                  child: Text('GCash'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Cash on Delivery',
-                                  child: Text('Cash on Delivery'),
-                                ),
+                              dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
+                              decoration: const InputDecoration(labelText: 'Payment Method'),
+                              items: [
+                                const DropdownMenuItem(value: 'Cash', child: Text('Cash')),
+                                const DropdownMenuItem(value: 'GCash', child: Text('GCash')),
+                                if (isDelivery)
+                                  const DropdownMenuItem(value: 'Cash on Delivery', child: Text('Cash on Delivery (COD)')),
                               ],
                               onChanged: (val) {
                                 if (val != null) {
@@ -2809,21 +3018,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           Expanded(
                             child: DropdownButtonFormField<String>(
                               initialValue: selectedPaymentStatus,
-                              dropdownColor: isDark
-                                  ? AppTheme.darkSurface
-                                  : Colors.white,
-                              decoration: const InputDecoration(
-                                labelText: 'Payment Status',
-                              ),
+                              dropdownColor: isDark ? AppTheme.darkSurface : Colors.white,
+                              decoration: const InputDecoration(labelText: 'Payment Status'),
                               items: const [
-                                DropdownMenuItem(
-                                  value: 'Paid',
-                                  child: Text('Paid'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Pending',
-                                  child: Text('Pending'),
-                                ),
+                                DropdownMenuItem(value: 'Pending', child: Text('Pending')),
+                                DropdownMenuItem(value: 'Paid', child: Text('Paid')),
                               ],
                               onChanged: (val) {
                                 if (val != null) {
@@ -2841,27 +3040,30 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         builder: (context) {
                           final qty = int.tryParse(qtyController.text) ?? 1;
                           final total = qty * pricePerUnit;
-                          return Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Total Amount:',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark
-                                      ? Colors.white70
-                                      : const Color(0xFF1E293B),
+                          return Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryColor.withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Total Order Amount:',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
-                              ),
-                              Text(
-                                '₱${total.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                  color: AppTheme.primaryColor,
+                                Text(
+                                  '₱${total.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppTheme.primaryColor,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           );
                         },
                       ),
@@ -2874,73 +3076,83 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('Cancel'),
                 ),
-                ElevatedButton(
+                ElevatedButton.icon(
                   onPressed: () async {
                     final name = nameController.text.trim();
                     final phone = phoneController.text.trim();
-                    final address = addressController.text.trim();
+                    String address = addressController.text.trim();
                     final qty = int.tryParse(qtyController.text) ?? 1;
 
                     if (name.isEmpty) {
-                      Helpers.showSnackBar(
-                        context,
-                        'Please input customer name.',
-                        isError: true,
-                      );
+                      Helpers.showSnackBar(context, 'Please enter customer name.', isError: true);
                       return;
                     }
+                    if (isDelivery && address.isEmpty) {
+                      Helpers.showSnackBar(context, 'Please enter delivery address for home delivery.', isError: true);
+                      return;
+                    }
+                    if (!isDelivery && address.isEmpty) {
+                      address = 'Store Pickup / Walk-in (JJAASS Water Station)';
+                    }
 
-                    final orderProvider = Provider.of<OrderProvider>(
-                      context,
-                      listen: false,
-                    );
-                    final custId = isWalkInGuest
-                        ? 'usr_walkin_guest'
-                        : (selectedCustomer?.id ?? 'usr_walkin_guest');
+                    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+                    final custId = isRegistered && selectedCustomer != null
+                        ? selectedCustomer!.id
+                        : 'usr_walkin_guest';
+
+                    // Determine order status & driver assignment based on user request:
+                    // If Delivery: Confirm & Assign driver if selected (OrderStatus.assigned), or Confirmed
+                    // If Pickup: Confirmed, and NO rider assigned
+                    final OrderStatus orderStatus = isDelivery
+                        ? (selectedDriver != null ? OrderStatus.assigned : OrderStatus.confirmed)
+                        : OrderStatus.confirmed;
+
+                    final String? driverId = isDelivery ? selectedDriver?.id : null;
+                    final String? driverName = isDelivery
+                        ? selectedDriver?.name
+                        : 'Not Needed (Walk-in/Pickup)';
 
                     try {
                       final newOrder = await orderProvider.placeOrder(
                         customerId: custId,
                         customerName: name,
                         customerPhone: phone.isNotEmpty ? phone : '+63 Guest',
-                        deliveryAddress: address.isNotEmpty
-                            ? address
-                            : 'Walk-in Pickup',
+                        deliveryAddress: address,
                         waterType: selectedWaterType,
                         quantity: qty,
                         pricePerUnit: pricePerUnit,
                         paymentMethod: selectedPaymentMethod,
                         paymentStatus: selectedPaymentStatus,
+                        orderStatus: orderStatus,
+                        driverId: driverId,
+                        driverName: driverName,
                       );
 
                       if (context.mounted) {
                         Navigator.of(context).pop();
-                        Helpers.showSnackBar(
-                          context,
-                          'Walk-in order created successfully!',
-                        );
+                        final String successMsg = isDelivery
+                            ? (selectedDriver != null
+                                ? 'Order ${newOrder.id} created & assigned to ${selectedDriver!.name}!'
+                                : 'Order ${newOrder.id} created for delivery (confirmed)!')
+                            : 'Store pickup order ${newOrder.id} created successfully!';
+                        Helpers.showSnackBar(context, successMsg);
 
-                        if (selectedPaymentMethod == 'GCash' &&
-                            selectedPaymentStatus == 'Pending') {
+                        if (selectedPaymentMethod == 'GCash' && selectedPaymentStatus == 'Pending') {
                           _showGcashPaymentDialog(newOrder, isDark);
                         }
                       }
                     } catch (e) {
                       if (context.mounted) {
-                        Helpers.showSnackBar(
-                          context,
-                          'Failed to create order: $e',
-                          isError: true,
-                        );
+                        Helpers.showSnackBar(context, 'Failed to create order: $e', isError: true);
                       }
                     }
                   },
+                  icon: const Icon(Icons.check_circle_rounded, size: 16),
+                  label: const Text('Confirm & Create Order'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryColor,
-                  ),
-                  child: const Text(
-                    'Place Order',
-                    style: TextStyle(color: Colors.white),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
                 ),
               ],
@@ -2986,7 +3198,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   color: Colors.white,
                 ),
                 label: const Text(
-                  'New Walk-in Order',
+                  'New Order',
                   style: TextStyle(fontSize: 12, color: Colors.white),
                 ),
                 style: ElevatedButton.styleFrom(

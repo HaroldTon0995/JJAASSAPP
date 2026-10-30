@@ -391,6 +391,9 @@ class OrderProvider extends ChangeNotifier {
     required double pricePerUnit,
     required String paymentMethod,
     String? paymentStatus,
+    OrderStatus? orderStatus,
+    String? driverId,
+    String? driverName,
     String? deliveryNote,
     double? latitude,
     double? longitude,
@@ -416,7 +419,9 @@ class OrderProvider extends ChangeNotifier {
       totalAmount: totalAmount,
       paymentMethod: paymentMethod,
       paymentStatus: paymentStatus ?? 'Pending',
-      orderStatus: OrderStatus.pending,
+      orderStatus: orderStatus ?? (driverId != null ? OrderStatus.assigned : OrderStatus.pending),
+      driverId: driverId,
+      driverName: driverName,
       createdAt: DateTime.now(),
       distance: '${(1.0 + Random().nextDouble() * 3.0).toStringAsFixed(1)} km',
       deliveryNote: (deliveryNote != null && deliveryNote.trim().isNotEmpty)
@@ -451,6 +456,12 @@ class OrderProvider extends ChangeNotifier {
           'createdAt': newOrder.createdAt.toIso8601String(),
           'distance': newOrder.distance,
         };
+        if (newOrder.driverId != null) {
+          insertMap['driverId'] = newOrder.driverId!;
+        }
+        if (newOrder.driverName != null) {
+          insertMap['driverName'] = newOrder.driverName!;
+        }
         if (newOrder.deliveryNote != null) {
           insertMap['deliveryNote'] = newOrder.deliveryNote!;
         }

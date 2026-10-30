@@ -8,9 +8,9 @@ import '../../providers/auth_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/ai_support_service.dart';
+import '../../services/navigation_launcher.dart';
 import '../../widgets/water_widgets.dart';
 import '../../widgets/google_map_widget.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'driver_styles.dart';
 
 class DriverDashboard extends StatefulWidget {
@@ -753,6 +753,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
                         children: [
                           Text(
                             'Active Job: ${activeJob.id}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               color: AppTheme.primaryColor,
@@ -760,10 +762,14 @@ class _DriverDashboardState extends State<DriverDashboard> {
                           ),
                           Text(
                             'Customer: ${activeJob.customerName}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 12),
                           ),
                           Text(
                             'Dest: ${activeJob.deliveryAddress}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 12),
                           ),
                         ],
@@ -830,6 +836,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
                             children: [
                               Text(
                                 '${job.customerName} (${job.id})',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
@@ -839,6 +847,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
                               const SizedBox(height: 2),
                               Text(
                                 job.deliveryAddress,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF475569),
@@ -1228,14 +1238,20 @@ class _DriverDashboardState extends State<DriverDashboard> {
                       children: [
                         Text(
                           'Customer: ${activeJob.customerName} (${activeJob.id})',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         Text(
                           'Address: ${activeJob.deliveryAddress}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 12),
                         ),
                         Text(
                           'Items: ${activeJob.itemsSummary}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12,
                             color: AppTheme.primaryColor,
@@ -1267,33 +1283,24 @@ class _DriverDashboardState extends State<DriverDashboard> {
                   Column(
                     children: [
                       ElevatedButton.icon(
-                        onPressed: () async {
-                          final String url;
-                          if (activeJob.latitude != null &&
-                              activeJob.longitude != null) {
-                            url =
-                                'https://www.google.com/maps/dir/?api=1&destination=${activeJob.latitude},${activeJob.longitude}';
-                          } else {
-                            final query =
-                                Uri.encodeComponent(activeJob.deliveryAddress);
-                            url =
-                                'https://www.google.com/maps/search/?api=1&query=$query';
-                          }
-                          final uri = Uri.parse(url);
-                          final canLaunch = await canLaunchUrl(uri);
-                          if (!mounted) return;
-                          if (canLaunch) {
-                            await launchUrl(uri, mode: LaunchMode.externalApplication);
-                          } else {
-                            Helpers.showSnackBar(context, 'Could not launch Google Maps.', isError: true);
-                          }
+                        onPressed: () {
+                          final double lat = activeJob.latitude ?? 14.5995;
+                          final double lng = activeJob.longitude ?? 120.9842;
+                          NavigationLauncher.showNavigationSheet(
+                            context,
+                            lat: lat,
+                            lng: lng,
+                            customerName: activeJob.customerName,
+                            address: activeJob.deliveryAddress,
+                            phone: activeJob.customerPhone,
+                          );
                         },
                         icon: const Icon(Icons.navigation_rounded, size: 16),
                         label: const Text('Navigate'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
+                          backgroundColor: const Color(0xFF1D63B8),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -1302,7 +1309,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
                         onPressed: () => _completeActiveJob(activeJob),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF10B981),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                         ),
                         child: const Text('Delivered'),
@@ -1328,6 +1335,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     destinationLat: activeJob.latitude,
                     destinationLng: activeJob.longitude,
                     destinationAddress: activeJob.deliveryAddress,
+                    customerName: activeJob.customerName,
+                    customerPhone: activeJob.customerPhone,
                     isDriverView: true,
                     orderId: activeJob.id,
                   ),

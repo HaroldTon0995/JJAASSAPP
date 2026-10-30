@@ -1360,7 +1360,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                   Text(
                                     tx.txnId.isNotEmpty
                                         ? tx.txnId
-                                        : 'Order #${tx.id}',
+                                        : (tx.id.startsWith('#') ? tx.id : 'Order #${tx.id}'),
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13,
@@ -1371,7 +1371,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Order #${tx.id} • ${tx.createdAt.toString().split(' ')[0]}',
+                                    '${tx.id.startsWith('#') ? tx.id : 'Order #${tx.id}'} • ${tx.createdAt.toString().split(' ')[0]}',
                                     style: TextStyle(
                                       color: isDark
                                           ? const Color(0xFF94A3B8)
@@ -2364,7 +2364,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     final activeDelivery =
         myOrders.any((o) => o.orderStatus == OrderStatus.onDelivery)
         ? myOrders.firstWhere((o) => o.orderStatus == OrderStatus.onDelivery)
-        : null;
+        : (myOrders.any((o) => o.orderStatus == OrderStatus.assigned)
+            ? myOrders.firstWhere((o) => o.orderStatus == OrderStatus.assigned)
+            : null);
     final pendingGcashOrders = myOrders
         .where(
           (o) =>
@@ -2498,25 +2500,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           ],
           const SizedBox(height: 16),
           if (activeDelivery != null) ...[
-            Container(
-              height: 220,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
-                ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: GoogleMapWidget(
-                  destinationLat: activeDelivery.latitude,
-                  destinationLng: activeDelivery.longitude,
-                  destinationAddress: activeDelivery.deliveryAddress,
-                  isDriverView: false,
-                  orderId: activeDelivery.id,
-                ),
-              ),
-            ),
+            _buildActiveDeliveryTracker(activeDelivery, isDark),
             const SizedBox(height: 16),
           ],
           Expanded(
@@ -2592,6 +2576,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                     ),
                                     Text(
                                       order.deliveryAddress,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         fontSize: 12.5,
                                         color: Color(0xFF475569),
@@ -2607,12 +2593,16 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                             color: AppTheme.primaryColor,
                                           ),
                                           const SizedBox(width: 4),
-                                          Text(
-                                            'Driver: ${order.driverName}',
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              color: AppTheme.primaryColor,
+                                          Expanded(
+                                            child: Text(
+                                              'Driver: ${order.driverName}',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: AppTheme.primaryColor,
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -3116,6 +3106,282 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                   child: const Text('Save Changes'),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveDeliveryTracker(OrderModel activeDelivery, bool isDark) {
+    int currentStep = 0;
+    switch (activeDelivery.orderStatus) {
+      case OrderStatus.pending:
+      case OrderStatus.confirmed:
+        currentStep = 0;
+        break;
+      case OrderStatus.assigned:
+        currentStep = 1;
+        break;
+      case OrderStatus.onDelivery:
+        currentStep = 2;
+        break;
+      case OrderStatus.completed:
+        currentStep = 3;
+        break;
+      case OrderStatus.cancelled:
+        currentStep = -1;
+        break;
+    }
+
+    final steps = [
+      {'title': 'Confirmed', 'icon': Icons.receipt_long_rounded},
+      {'title': 'Assigned', 'icon': Icons.inventory_2_rounded},
+      {'title': 'On the Way', 'icon': Icons.two_wheeler_rounded},
+      {'title': 'Delivered', 'icon': Icons.check_circle_rounded},
+    ];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.white10 : const Color(0xFFCBD5E1),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 9,
+                      height: 9,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF10B981),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        activeDelivery.id.startsWith('#')
+                            ? 'Live Order ${activeDelivery.id}'
+                            : 'Live Order #${activeDelivery.id}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          color: Color(0xFF0F2B5C),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: activeDelivery.orderStatus.color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  activeDelivery.orderStatus.displayName,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: activeDelivery.orderStatus.color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Grab-style 4-step progress tracker
+          Row(
+            children: List.generate(steps.length, (idx) {
+              final step = steps[idx];
+              final isDone = currentStep > idx;
+              final isCurrent = currentStep == idx;
+              final color = isDone
+                  ? const Color(0xFF10B981)
+                  : (isCurrent ? const Color(0xFF1D63B8) : const Color(0xFF94A3B8));
+
+              return Expanded(
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        if (idx > 0)
+                          Expanded(
+                            child: Container(
+                              height: 3,
+                              color: isDone || isCurrent
+                                  ? const Color(0xFF10B981)
+                                  : const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: isDone || isCurrent
+                                ? color
+                                : const Color(0xFFF1F5F9),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isDone || isCurrent
+                                  ? color
+                                  : const Color(0xFFCBD5E1),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Icon(
+                            isDone ? Icons.check_rounded : (step['icon'] as IconData),
+                            color: isDone || isCurrent ? Colors.white : const Color(0xFF94A3B8),
+                            size: 14,
+                          ),
+                        ),
+                        if (idx < steps.length - 1)
+                          Expanded(
+                            child: Container(
+                              height: 3,
+                              color: isDone
+                                  ? const Color(0xFF10B981)
+                                  : const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      step['title'] as String,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
+                        color: isCurrent
+                            ? const Color(0xFF1D63B8)
+                            : (isDone ? const Color(0xFF10B981) : const Color(0xFF64748B)),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 16),
+
+          // Rider info card
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Row(
+              children: [
+                const CircleAvatar(
+                  radius: 19,
+                  backgroundColor: Color(0xFF1D63B8),
+                  child: Icon(
+                    Icons.two_wheeler_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        activeDelivery.driverName?.isNotEmpty == true
+                            ? activeDelivery.driverName!
+                            : 'Assigning Delivery Rider...',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      Text(
+                        activeDelivery.itemsSummary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (activeDelivery.latitude != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF86EFAC)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.pin_drop_rounded, size: 12, color: Color(0xFF15803D)),
+                        SizedBox(width: 4),
+                        Text(
+                          'Pin Set',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF15803D),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Live Google Map Widget with OSRM road polyline & live ETA
+          Container(
+            height: 220,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFCBD5E1)),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: GoogleMapWidget(
+                destinationLat: activeDelivery.latitude,
+                destinationLng: activeDelivery.longitude,
+                destinationAddress: activeDelivery.deliveryAddress,
+                isDriverView: false,
+                orderId: activeDelivery.id,
+              ),
             ),
           ),
         ],
