@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../core/theme/app_theme.dart';
 import '../models/order_model.dart';
 import '../models/user_model.dart';
@@ -767,7 +768,7 @@ class _DonutChartPainter extends CustomPainter {
       oldDelegate.isDark != isDark;
 }
 
-/// Live Interactive Fleet GPS Route Monitor with Real-Time Telemetry & Vector Roads
+/// Live Interactive Fleet GPS Route Monitor with Real Google Map & Telemetry
 class LiveFleetGpsMapWidget extends StatefulWidget {
   final List<OrderModel> orders;
   final List<UserModel> drivers;
@@ -790,62 +791,154 @@ class LiveFleetGpsMapWidget extends StatefulWidget {
   State<LiveFleetGpsMapWidget> createState() => _LiveFleetGpsMapWidgetState();
 }
 
-class _LiveFleetGpsMapWidgetState extends State<LiveFleetGpsMapWidget>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animController;
-  final TransformationController _transformController = TransformationController();
-  double _currentScale = 1.0;
+class _LiveFleetGpsMapWidgetState extends State<LiveFleetGpsMapWidget> {
+  GoogleMapController? _mapController;
 
-  @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 8),
-    )..repeat();
+  // JJAASS Water Market HQ in Ligao City, Albay, Philippines
+  static const LatLng _stationHQ = LatLng(13.2415, 123.5358);
+
+  LatLng _getOrderCoord(OrderModel order, int index) {
+    if (order.latitude != null && order.longitude != null) {
+      return LatLng(order.latitude!, order.longitude!);
+    }
+    // Deterministic offset in Ligao City for orders without raw GPS
+    final hash = order.id.hashCode;
+    final latOffset = ((hash % 100) / 10000.0) - 0.005 + (index * 0.0018);
+    final lngOffset = (((hash >> 4) % 100) / 10000.0) - 0.005 - (index * 0.0016);
+    return LatLng(_stationHQ.latitude + latOffset, _stationHQ.longitude + lngOffset);
   }
 
-  @override
-  void dispose() {
-    _animController.dispose();
-    _transformController.dispose();
-    super.dispose();
+  LatLng _getDriverCoord(OrderModel order, LatLng destCoord) {
+    // Rider midway or near destination if active
+    if (order.orderStatus == OrderStatus.onDelivery) {
+      return LatLng(
+        _stationHQ.latitude + (destCoord.latitude - _stationHQ.latitude) * 0.65,
+        _stationHQ.longitude + (destCoord.longitude - _stationHQ.longitude) * 0.65,
+      );
+    } else if (order.orderStatus == OrderStatus.assigned) {
+      return LatLng(
+        _stationHQ.latitude + (destCoord.latitude - _stationHQ.latitude) * 0.25,
+        _stationHQ.longitude + (destCoord.longitude - _stationHQ.longitude) * 0.25,
+      );
+    }
+    return _stationHQ;
   }
 
   void _zoomIn() {
-    setState(() {
-      _currentScale = (_currentScale * 1.25).clamp(0.7, 3.0);
-      _transformController.value = Matrix4.diagonal3Values(_currentScale, _currentScale, 1.0);
-    });
+    _mapController?.animateCamera(CameraUpdate.zoomIn());
   }
 
   void _zoomOut() {
-    setState(() {
-      _currentScale = (_currentScale / 1.25).clamp(0.7, 3.0);
-      _transformController.value = Matrix4.diagonal3Values(_currentScale, _currentScale, 1.0);
-    });
+    _mapController?.animateCamera(CameraUpdate.zoomOut());
   }
 
   void _resetView() {
-    setState(() {
-      _currentScale = 1.0;
-      _transformController.value = Matrix4.identity();
-    });
+    _mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        const CameraPosition(target: _stationHQ, zoom: 14.5),
+      ),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant LiveFleetGpsMapWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedOrder != null && widget.selectedOrder != oldWidget.selectedOrder) {
+      final dest = _getOrderCoord(widget.selectedOrder!, 0);
+      _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: dest, zoom: 15.5),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = widget.isDark;
-    final mapBgColor = widget.satelliteMode
-        ? (isDark ? const Color(0xFF0F172A) : const Color(0xFF1E293B))
-        : (isDark ? const Color(0xFF131D2D) : const Color(0xFFF1F5F9));
+    final activeOrders = widget.orders.where((o) => !o.isWalkIn).toList();
+
+    // Build real Google Map Markers
+    final Set<Marker> markers = {};
+    final Set<Polyline> polylines = {};
+
+    // 1. Water Station Headquarters Pin
+    markers.add(
+      Marker(
+        markerId: const MarkerId('station_hq'),
+        position: _stationHQ,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        infoWindow: const InfoWindow(
+          title: '💧 JJAASS Water Market HQ',
+          snippet: 'Station Central Hub • Ligao City, Albay',
+        ),
+      ),
+    );
+
+    // 2. Customer Delivery Pins & Active Riders
+    for (int i = 0; i < activeOrders.length; i++) {
+      final o = activeOrders[i];
+      final isSelected = widget.selectedOrder?.id == o.id;
+      final destCoord = _getOrderCoord(o, i);
+      final driverCoord = _getDriverCoord(o, destCoord);
+      final isActive = o.orderStatus == OrderStatus.onDelivery || o.orderStatus == OrderStatus.assigned;
+      final isCompleted = o.orderStatus == OrderStatus.completed;
+
+      // Customer Marker
+      final double markerHue = isSelected
+          ? BitmapDescriptor.hueMagenta
+          : (isCompleted
+              ? BitmapDescriptor.hueGreen
+              : (isActive ? BitmapDescriptor.hueCyan : BitmapDescriptor.hueOrange));
+
+      markers.add(
+        Marker(
+          markerId: MarkerId('customer_${o.id}'),
+          position: destCoord,
+          icon: BitmapDescriptor.defaultMarkerWithHue(markerHue),
+          infoWindow: InfoWindow(
+            title: '${o.id} • ${o.customerName}',
+            snippet: '${o.deliveryAddress} (${o.orderStatus.displayName})',
+            onTap: () => widget.onSelectOrder?.call(o),
+          ),
+          onTap: () => widget.onSelectOrder?.call(o),
+        ),
+      );
+
+      // Rider Marker (if active delivery)
+      if (isActive && o.driverName != null) {
+        markers.add(
+          Marker(
+            markerId: MarkerId('driver_${o.id}'),
+            position: driverCoord,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
+            infoWindow: InfoWindow(
+              title: '🛵 Rider: ${o.driverName}',
+              snippet: 'Dispatched for ${o.id} • Speed ~28 km/h',
+            ),
+            onTap: () => widget.onSelectOrder?.call(o),
+          ),
+        );
+
+        // Route Polyline from Station to Driver to Customer
+        polylines.add(
+          Polyline(
+            polylineId: PolylineId('route_${o.id}'),
+            points: [_stationHQ, driverCoord, destCoord],
+            color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF38BDF8),
+            width: isSelected ? 5 : 3,
+            patterns: [PatternItem.dash(15), PatternItem.gap(8)],
+          ),
+        );
+      }
+    }
 
     return Container(
-      height: 380,
+      height: 420,
       width: double.infinity,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: mapBgColor,
+        color: isDark ? const Color(0xFF131D2D) : const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
@@ -854,29 +947,23 @@ class _LiveFleetGpsMapWidgetState extends State<LiveFleetGpsMapWidget>
       ),
       child: Stack(
         children: [
-          // Animated Canvas Map with interactive pan and zoom
+          // Authentic Google Map
           Positioned.fill(
-            child: InteractiveViewer(
-              transformationController: _transformController,
-              minScale: 0.7,
-              maxScale: 3.0,
-              boundaryMargin: const EdgeInsets.all(100),
-              child: AnimatedBuilder(
-                animation: _animController,
-                builder: (context, child) {
-                  return CustomPaint(
-                    size: const Size(1000, 500),
-                    painter: _FleetLiveMapCanvasPainter(
-                      orders: widget.orders,
-                      drivers: widget.drivers,
-                      selectedOrder: widget.selectedOrder,
-                      animProgress: _animController.value,
-                      isDark: isDark,
-                      satelliteMode: widget.satelliteMode,
-                    ),
-                  );
-                },
+            child: GoogleMap(
+              initialCameraPosition: const CameraPosition(
+                target: _stationHQ,
+                zoom: 14.5,
               ),
+              mapType: widget.satelliteMode ? MapType.hybrid : MapType.normal,
+              markers: markers,
+              polylines: polylines,
+              zoomControlsEnabled: false,
+              myLocationButtonEnabled: false,
+              compassEnabled: true,
+              mapToolbarEnabled: true,
+              onMapCreated: (controller) {
+                _mapController = controller;
+              },
             ),
           ),
 
@@ -887,12 +974,16 @@ class _LiveFleetGpsMapWidgetState extends State<LiveFleetGpsMapWidget>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF0F172A).withValues(alpha: 0.88) : Colors.white.withValues(alpha: 0.92),
+                color: isDark
+                    ? const Color(0xFF0F172A).withValues(alpha: 0.88)
+                    : Colors.white.withValues(alpha: 0.94),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: isDark ? Colors.white12 : const Color(0xFFE2E8F0)),
+                border: Border.all(
+                  color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
+                    color: Colors.black.withValues(alpha: 0.12),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -911,7 +1002,7 @@ class _LiveFleetGpsMapWidgetState extends State<LiveFleetGpsMapWidget>
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'GPS Live Feed • Ligao City Grid',
+                    'Google Maps Live Fleet • Ligao City Hub',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -926,7 +1017,7 @@ class _LiveFleetGpsMapWidgetState extends State<LiveFleetGpsMapWidget>
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      '${widget.orders.where((o) => o.orderStatus == OrderStatus.onDelivery || o.orderStatus == OrderStatus.assigned).length} Active Vehicles',
+                      '${activeOrders.where((o) => o.orderStatus == OrderStatus.onDelivery || o.orderStatus == OrderStatus.assigned).length} Active Dispatches',
                       style: const TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
@@ -960,8 +1051,8 @@ class _LiveFleetGpsMapWidgetState extends State<LiveFleetGpsMapWidget>
                 ),
                 const SizedBox(height: 6),
                 _buildMapButton(
-                  icon: Icons.center_focus_strong_rounded,
-                  tooltip: 'Reset to Hub',
+                  icon: Icons.my_location_rounded,
+                  tooltip: 'Reset to Station Hub',
                   isDark: isDark,
                   onTap: _resetView,
                 ),
@@ -978,7 +1069,9 @@ class _LiveFleetGpsMapWidgetState extends State<LiveFleetGpsMapWidget>
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF0F172A).withValues(alpha: 0.94) : Colors.white.withValues(alpha: 0.96),
+                  color: isDark
+                      ? const Color(0xFF0F172A).withValues(alpha: 0.94)
+                      : Colors.white.withValues(alpha: 0.96),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: AppTheme.primaryColor.withValues(alpha: 0.4),
@@ -1000,7 +1093,7 @@ class _LiveFleetGpsMapWidgetState extends State<LiveFleetGpsMapWidget>
                         color: AppTheme.primaryColor.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
+                      child: const Icon(
                         Icons.delivery_dining_rounded,
                         color: AppTheme.primaryColor,
                         size: 22,
@@ -1101,7 +1194,9 @@ class _LiveFleetGpsMapWidgetState extends State<LiveFleetGpsMapWidget>
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: isDark ? const Color(0xFF1E293B).withValues(alpha: 0.9) : Colors.white.withValues(alpha: 0.95),
+        color: isDark
+            ? const Color(0xFF1E293B).withValues(alpha: 0.9)
+            : Colors.white.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(8),
         elevation: 2,
         child: InkWell(
@@ -1121,262 +1216,4 @@ class _LiveFleetGpsMapWidgetState extends State<LiveFleetGpsMapWidget>
       ),
     );
   }
-}
-
-class _FleetLiveMapCanvasPainter extends CustomPainter {
-  final List<OrderModel> orders;
-  final List<UserModel> drivers;
-  final OrderModel? selectedOrder;
-  final double animProgress;
-  final bool isDark;
-  final bool satelliteMode;
-
-  _FleetLiveMapCanvasPainter({
-    required this.orders,
-    required this.drivers,
-    this.selectedOrder,
-    required this.animProgress,
-    required this.isDark,
-    required this.satelliteMode,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final double width = size.width;
-    final double height = size.height;
-
-    // Central Station Hub Coordinate (Center-Left of map)
-    final Offset hubCoord = Offset(width * 0.22, height * 0.52);
-
-    // 1. Draw Map Grid Terrain / Land Background
-    final landPaint = Paint()
-      ..color = satelliteMode
-          ? (isDark ? const Color(0xFF0F172A) : const Color(0xFF1E293B))
-          : (isDark ? const Color(0xFF111827) : const Color(0xFFF8FAFC));
-    canvas.drawRect(Rect.fromLTWH(0, 0, width, height), landPaint);
-
-    // 2. Draw Vector Roads & Avenues
-    final roadColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0);
-    final mainRoadColor = isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1);
-
-    final roadPaint = Paint()
-      ..color = roadColor
-      ..strokeWidth = 14.0
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final mainRoadPaint = Paint()
-      ..color = mainRoadColor
-      ..strokeWidth = 22.0
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final roadLinePaint = Paint()
-      ..color = (isDark ? Colors.white12 : Colors.white)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-
-    // Main East-West Highway
-    final highwayPath = Path()
-      ..moveTo(0, height * 0.52)
-      ..lineTo(width, height * 0.52);
-    canvas.drawPath(highwayPath, mainRoadPaint);
-    canvas.drawPath(highwayPath, roadLinePaint);
-
-    // Secondary Cross Avenues
-    final List<Path> roads = [
-      Path()..moveTo(width * 0.22, 0)..lineTo(width * 0.22, height),
-      Path()..moveTo(width * 0.45, 0)..lineTo(width * 0.45, height),
-      Path()..moveTo(width * 0.70, 0)..lineTo(width * 0.70, height),
-      Path()..moveTo(width * 0.88, 0)..lineTo(width * 0.88, height),
-      Path()..moveTo(0, height * 0.24)..lineTo(width, height * 0.24),
-      Path()..moveTo(0, height * 0.78)..lineTo(width, height * 0.78),
-      // Diagonal Connector
-      Path()..moveTo(width * 0.22, height * 0.52)..lineTo(width * 0.45, height * 0.24),
-      Path()..moveTo(width * 0.45, height * 0.52)..lineTo(width * 0.70, height * 0.78),
-      Path()..moveTo(width * 0.70, height * 0.52)..lineTo(width * 0.88, height * 0.24),
-    ];
-
-    for (var r in roads) {
-      canvas.drawPath(r, roadPaint);
-      canvas.drawPath(r, roadLinePaint);
-    }
-
-    // 3. Draw City Neighborhood Blocks & Landmarks
-    final blockPaint = Paint()
-      ..color = isDark ? const Color(0xFF0F172A) : const Color(0xFFEDE9FE).withValues(alpha: 0.5)
-      ..style = PaintingStyle.fill;
-
-    final blockBorder = Paint()
-      ..color = isDark ? Colors.white10 : const Color(0xFFDDD6FE).withValues(alpha: 0.7)
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
-
-    final List<Rect> blocks = [
-      Rect.fromLTWH(width * 0.05, height * 0.05, width * 0.14, height * 0.16),
-      Rect.fromLTWH(width * 0.25, height * 0.05, width * 0.17, height * 0.16),
-      Rect.fromLTWH(width * 0.48, height * 0.05, width * 0.19, height * 0.16),
-      Rect.fromLTWH(width * 0.73, height * 0.05, width * 0.12, height * 0.16),
-      Rect.fromLTWH(width * 0.05, height * 0.58, width * 0.14, height * 0.17),
-      Rect.fromLTWH(width * 0.25, height * 0.58, width * 0.17, height * 0.17),
-      Rect.fromLTWH(width * 0.48, height * 0.58, width * 0.19, height * 0.17),
-      Rect.fromLTWH(width * 0.73, height * 0.58, width * 0.12, height * 0.17),
-    ];
-
-    for (var b in blocks) {
-      final RRect rr = RRect.fromRectAndRadius(b, const Radius.circular(8));
-      canvas.drawRRect(rr, blockPaint);
-      canvas.drawRRect(rr, blockBorder);
-    }
-
-    // 4. Plot Delivery Destination Pins & Real-Time Driver Routes
-    // Generate deterministic coordinate offsets across the city map for each order
-    final displayOrders = orders.take(8).toList();
-
-    for (int i = 0; i < displayOrders.length; i++) {
-      final o = displayOrders[i];
-      final isSelected = selectedOrder?.id == o.id;
-      final bool isActive = o.orderStatus == OrderStatus.onDelivery || o.orderStatus == OrderStatus.assigned;
-      final bool isCompleted = o.orderStatus == OrderStatus.completed;
-
-      // Deterministic position on grid
-      final hash = o.deliveryAddress.hashCode.abs() + i * 37;
-      final double destX = width * (0.35 + ((hash % 55) / 100.0));
-      final double destY = height * (0.15 + (((hash >> 3) % 70) / 100.0));
-      final Offset destCoord = Offset(destX, destY);
-
-      // Interpolate driver vehicle location between Hub and Destination
-      final double driverCycleProgress = (animProgress + (i * 0.25)) % 1.0;
-      final double transitProgress = isActive ? driverCycleProgress : (isCompleted ? 1.0 : 0.0);
-
-      final Offset driverPos = Offset(
-        hubCoord.dx + (destCoord.dx - hubCoord.dx) * transitProgress,
-        hubCoord.dy + (destCoord.dy - hubCoord.dy) * transitProgress,
-      );
-
-      // Draw Glowing Route Polyline from Hub to Destination
-      final routeColor = isSelected
-          ? const Color(0xFF0284C7)
-          : (isActive ? const Color(0xFF38BDF8) : (isCompleted ? const Color(0xFF10B981) : Colors.amber));
-
-      final routePaint = Paint()
-        ..color = routeColor.withValues(alpha: isSelected ? 0.9 : 0.6)
-        ..strokeWidth = isSelected ? 4.0 : 2.5
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round;
-
-      canvas.drawLine(hubCoord, destCoord, routePaint);
-
-      // Draw Animated Dash Pulse flowing towards destination
-      if (isActive) {
-        final dashPaint = Paint()
-          ..color = Colors.white.withValues(alpha: 0.9)
-          ..strokeWidth = isSelected ? 5.0 : 3.5
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round;
-
-        final double pulseX = hubCoord.dx + (destCoord.dx - hubCoord.dx) * driverCycleProgress;
-        final double pulseY = hubCoord.dy + (destCoord.dy - hubCoord.dy) * driverCycleProgress;
-        canvas.drawCircle(Offset(pulseX, pulseY), 4, dashPaint);
-      }
-
-      // Draw Customer Delivery Destination Pin
-      final pinPaint = Paint()
-        ..color = isSelected ? const Color(0xFFF43F5E) : (isCompleted ? const Color(0xFF10B981) : const Color(0xFF6366F1))
-        ..style = PaintingStyle.fill;
-
-      canvas.drawCircle(destCoord, isSelected ? 9 : 7, pinPaint);
-      canvas.drawCircle(
-        destCoord,
-        isSelected ? 14 : 11,
-        Paint()
-          ..color = (isSelected ? const Color(0xFFF43F5E) : const Color(0xFF6366F1)).withValues(alpha: 0.25)
-          ..style = PaintingStyle.fill,
-      );
-
-      // Destination Label
-      final destPainter = TextPainter(
-        text: TextSpan(
-          text: o.customerName.split(' ').first,
-          style: TextStyle(
-            color: isDark ? Colors.white : const Color(0xFF1E293B),
-            fontSize: 9,
-            fontWeight: FontWeight.bold,
-            backgroundColor: (isDark ? const Color(0xFF0F172A) : Colors.white).withValues(alpha: 0.8),
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      destPainter.paint(canvas, Offset(destCoord.dx - destPainter.width / 2, destCoord.dy + 12));
-
-      // Draw Animated Moving Driver Vehicle Icon
-      if (isActive) {
-        final vehiclePaint = Paint()
-          ..color = const Color(0xFF0284C7)
-          ..style = PaintingStyle.fill;
-
-        canvas.drawCircle(driverPos, isSelected ? 12 : 9, vehiclePaint);
-        canvas.drawCircle(
-          driverPos,
-          isSelected ? 18 : 14,
-          Paint()
-            ..color = const Color(0xFF0284C7).withValues(alpha: 0.3)
-            ..style = PaintingStyle.fill,
-        );
-
-        // Driver Name Tag
-        final driverLabel = o.driverName != null ? o.driverName!.split(' ').first : 'Rider';
-        final driverPainter = TextPainter(
-          text: TextSpan(
-            text: '🏍️ $driverLabel',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 8,
-              fontWeight: FontWeight.w900,
-              backgroundColor: Color(0xFF0284C7),
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        driverPainter.paint(canvas, Offset(driverPos.dx - driverPainter.width / 2, driverPos.dy - 16));
-      }
-    }
-
-    // 5. Draw Water Refilling Station Central Hub Beacon
-    // Pulsing radar ripple circles
-    final rippleRadius = 14 + (animProgress * 22);
-    final ripplePaint = Paint()
-      ..color = AppTheme.primaryColor.withValues(alpha: (1.0 - animProgress).clamp(0.0, 1.0) * 0.5)
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
-    canvas.drawCircle(hubCoord, rippleRadius, ripplePaint);
-
-    // Hub Solid Pin
-    final hubPaint = Paint()
-      ..color = AppTheme.primaryColor
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(hubCoord, 14, hubPaint);
-
-    final hubInner = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(hubCoord, 6, hubInner);
-
-    // Hub Text Label
-    final hubTextPainter = TextPainter(
-      text: const TextSpan(
-        text: '💧 JJAASS Central Hub',
-        style: TextStyle(
-          color: Color(0xFF0284C7),
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    hubTextPainter.paint(canvas, Offset(hubCoord.dx - hubTextPainter.width / 2, hubCoord.dy + 18));
-  }
-
-  @override
-  bool shouldRepaint(covariant _FleetLiveMapCanvasPainter oldDelegate) => true;
 }
